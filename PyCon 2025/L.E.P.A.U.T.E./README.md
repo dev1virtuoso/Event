@@ -51,6 +51,43 @@ python3 example_pip.py
 python3 example.py
 ```
 
+### Modes
+
+1. **GUI/Realtime Mode**:
+   ```bash:disable-run
+   python LEPAUTE.py
+   ```
+   - Displays the camera feed with parameters shown in the top-right corner.
+   - Shows a red border for rotation and a blue border for translation.
+   - Saves data to `lepaute_data.json`.
+   - Saves images to the `frames` directory.
+
+2. **JSON Mode**:
+   ```python
+   from LEPAUTE import run_main
+   run_main(display_mode="json", save_json=True)
+   ```
+   - Does not display a window; saves data to `lepaute_data.json`.
+
+3. **Save Images**:
+   ```python
+   from LEPAUTE import run_main
+   run_main(display_mode="gui,realtime", save_image=True, frames_dir="frames")
+   ```
+   - Saves images to the `frames` directory.
+
+4. **Using `example.py`**:
+   ```bash
+   python example.py
+   ```
+   - Runs in realtime mode, saves JSON and images, and prints collected data.
+
+5. **Using `example_pip.py`**:
+   ```bash
+   python example_pip.py
+   ```
+   - Runs with default settings and prints Lie parameters and loss.
+
 ## Requirements
 
 - "torch>=2.3.0",
@@ -67,3 +104,7 @@ python3 example.py
 - Ensure webcam access for real-time data collection.
 - In Pyodide, data is stored in memory only.
 - Debug logs can be enabled by setting `logging.basicConfig(level=logging.DEBUG)`.
+- Due to priority issues, the following issues will be addressed as soon as possible. It is expected that it will take a month to implement all the following functions. At the same time, there are some minor issues in the current code, which I hope to fix on or before Friday. The issues include: 
+  - data dependency issues. The current implementation relies on placeholder datasets (such as randomly generated validation datasets) and cyclic labels, lacking support from real data, which limits the effectiveness of training and performance in actual applications. The code also clearly states that it needs to be replaced with real data, otherwise the evaluation results may not be representative. 
+  - Functional implementation is incomplete. Some functions (such as validation dataset generation and label assignment) are temporary and have not yet been fully implemented. For example, the training process uses simple cyclic labels, which cannot reflect the complexity of real scenes. In addition, support for SE(3) or Sim(3) does not seem to be fully implemented, and is limited to SE(2). 
+  - Error handling basics. Although there is basic error logging, the handling of some key errors (such as the camera cannot be turned on, low-variance frame skipping) is relatively simple, lacking a more robust response strategy, which may affect system stability.
