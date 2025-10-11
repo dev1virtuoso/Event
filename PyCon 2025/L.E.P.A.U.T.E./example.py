@@ -2,10 +2,12 @@ import asyncio
 import os
 import cv2
 import numpy as np
-from main import main, get_collected_data
+from main import main
+from utils import get_collected_data
 from data_access import load_data
 import multiprocessing
 import logging
+import kornia as K
 
 logger = logging.getLogger(__name__)
 

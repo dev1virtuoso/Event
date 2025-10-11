@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import cv2
 import numpy as np
 from typing import List, Optional, Dict
@@ -6,14 +7,7 @@ import json
 import multiprocessing
 from config import DEVICE, DTYPE, DATA_STORE, logger
 from models import LieGroupRepresentation
-
-def create_meshgrid(height: int, width: int, device: torch.device = DEVICE) -> torch.Tensor:
-    """Create a 2D meshgrid for image transformations."""
-    x = torch.linspace(0, width - 1, width, device=device, dtype=DTYPE)
-    y = torch.linspace(0, height - 1, height, device=device, dtype=DTYPE)
-    grid_y, grid_x = torch.meshgrid(y, x, indexing="ij")
-    grid = torch.stack([grid_x, grid_y], dim=-1)
-    return grid
+import kornia as K
 
 def custom_match_nn(descriptors1: torch.Tensor, descriptors2: torch.Tensor, threshold: float = 0.9) -> torch.Tensor:
     """Match descriptors for feature extraction."""
@@ -102,22 +96,24 @@ class GeometricTransformationExtraction:
         try:
             feats1 = self.local_feature(rgb1)
             feats2 = self.local_feature(rgb2)
+            # Handle varying output formats from kornia.feature.LocalFeature
             if isinstance(feats1, (tuple, list)) and len(feats1) >= 2:
                 keypoints1 = K.feature.get_laf_center(feats1[0])
-                descriptors1 = feats1[2] if len(feats1) == 3 else feats1[1]
+                descriptors1 = feats1[2] if len(feats1) > 2 else feats1[1]
             else:
-                keypoints1 = feats1.keypoints
-                descriptors1 = feats1.descriptors
+                logger.debug("Unexpected feature output format, falling back to ORB")
+                return self._orb_fallback(img1_np, img2_np)
             
             if isinstance(feats2, (tuple, list)) and len(feats2) >= 2:
                 keypoints2 = K.feature.get_laf_center(feats2[0])
-                descriptors2 = feats2[2] if len(feats2) == 3 else feats2[1]
+                descriptors2 = feats2[2] if len(feats2) > 2 else feats2[1]
             else:
-                keypoints2 = feats2.keypoints
-                descriptors2 = feats2.descriptors
+                logger.debug("Unexpected feature output format, falling back to ORB")
+                return self._orb_fallback(img1_np, img2_np)
             
             if keypoints1 is None or descriptors1 is None or keypoints2 is None or descriptors2 is None:
-                raise ValueError("Invalid feature output")
+                logger.debug("Invalid feature output, using ORB fallback")
+                return self._orb_fallback(img1_np, img2_np)
             
             matches = custom_match_nn(descriptors1, descriptors2, threshold=0.9)
             if matches.shape[0] < 4:

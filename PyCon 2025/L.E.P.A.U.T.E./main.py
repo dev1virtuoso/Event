@@ -11,6 +11,7 @@ from training import PreTraining, Training, Hyperparameter
 from models import TransformerModel
 from utils import DynamicResourceManager, MultiModalProcessor, display_raw_frame, display_or_save_data
 from config import OBJECT_NAMES
+import kornia as K
 
 @retry(stop_max_attempt_number=3, wait_fixed=1000)
 def open_camera(index: int = 0) -> cv2.VideoCapture:

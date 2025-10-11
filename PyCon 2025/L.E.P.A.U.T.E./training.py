@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import asyncio
 from typing import Tuple, List
 from config import DEVICE, HAS_PML, OBJECT_NAMES, logger
-from models import GeometricLoss, TransformerModel
+from models import GeometricLoss, TransformerModel, LieGroupRepresentation
 from utils import GeometricTransformationExtraction
 from torch.optim import AdamW
 
@@ -44,7 +44,12 @@ class PreTraining:
             self.optimizer.zero_grad()
             lie_params = GeometricTransformationExtraction().extract_2d_transform(image1, image2).unsqueeze(0)
             output = self.model(image1.unsqueeze(0), lie_params)
-            loss = self.loss_fn(output, label.unsqueeze(0), self.model, image1.unsqueeze(0), lie_params.squeeze(0))
+            # Ensure label is 1D tensor of shape [batch_size]
+            if label.dim() > 1:
+                label = label.squeeze()
+            if label.dim() == 0:
+                label = label.unsqueeze(0)
+            loss = self.loss_fn(output, label, self.model, image1.unsqueeze(0), lie_params.squeeze(0))
             ss_loss = await self.self_sup.train_step(image1, image2)
             total_loss = loss + 0.3 * ss_loss
             total_loss.backward()
@@ -106,7 +111,12 @@ class Evaluation:
                 try:
                     image1 = image1.to(DEVICE, DTYPE)
                     image2 = image2.to(DEVICE, DTYPE)
+                    # Ensure label is 1D tensor of shape [batch_size]
                     label = label.to(DEVICE)
+                    if label.dim() > 1:
+                        label = label.squeeze()
+                    if label.dim() == 0:
+                        label = label.unsqueeze(0)
                     lie_params = self.transform_extract.extract_2d_transform(image1, image2).unsqueeze(0)
                     output = self.model(image1.unsqueeze(0), lie_params)
                     _, predicted = torch.max(output, 1)

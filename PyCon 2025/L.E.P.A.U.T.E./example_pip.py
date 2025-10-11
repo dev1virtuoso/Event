@@ -1,4 +1,5 @@
-from main import main, load_data
+from main import main
+from data_access import load_data
 import asyncio
 import logging
 

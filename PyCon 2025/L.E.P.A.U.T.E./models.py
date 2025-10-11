@@ -4,7 +4,14 @@ import torch.nn.functional as F
 import kornia as K
 from typing import Tuple
 from config import DEVICE, DTYPE, OBJECT_NAMES, logger
-from utils import create_meshgrid
+
+def create_meshgrid(height: int, width: int, device: torch.device = DEVICE) -> torch.Tensor:
+    """Create a 2D meshgrid for image transformations."""
+    x = torch.linspace(0, width - 1, width, device=device, dtype=DTYPE)
+    y = torch.linspace(0, height - 1, height, device=device, dtype=DTYPE)
+    grid_y, grid_x = torch.meshgrid(y, x, indexing="ij")
+    grid = torch.stack([grid_x, grid_y], dim=-1)
+    return grid
 
 class LieGroupRepresentation(nn.Module):
     def __init__(self, group_type: str = "SE(2)"):
