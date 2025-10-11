@@ -1,12 +1,11 @@
 import json
 import platform
 from typing import List, Dict
-from LEPAUTE import get_collected_data
-import logging
+from utils import get_collected_data
+from config import logger
 
-logger = logging.getLogger(__name__)
-
-def load_data(file_path: str = None, format: str = "json") -> List[Dict]:
+def load_data(file_path: str = "lepaute_data.json", format: str = "json") -> List[Dict]:
+    """Load pipeline data from memory or file."""
     try:
         data = get_collected_data()
         if data:
@@ -16,7 +15,8 @@ def load_data(file_path: str = None, format: str = "json") -> List[Dict]:
             if format == "json":
                 with open(file_path, "r") as f:
                     return json.load(f)
+        logger.warning(f"No data found in memory or file: {file_path}")
         return []
     except Exception as e:
-        logger.error(f"Error loading data: {e}")
+        logger.error(f"Error loading data from {file_path}: {e}")
         return []

@@ -45,8 +45,9 @@ python3 example_pip.py
 
 ### Install from source
 
+Visit [cifar-10-python.tar.gz](https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz) on your brower, download it, and save at your /path/to/custom/data (e.g. /data)
 
-1. Run the [example.py](example.py) file.
+2. Run the [example.py](example.py) file.
 ```
 python3 example.py
 ```

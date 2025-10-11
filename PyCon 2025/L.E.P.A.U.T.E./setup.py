@@ -1,10 +1,9 @@
-# setup.py
 from setuptools import setup, find_packages
 import os
 
 setup(
     name="lepaute",
-    version="1.1.5",  # Incremented for feature extraction and evaluation fixes
+    version="1.1.6",  # Incremented for modularization and bug fixes
     packages=find_packages(),
     install_requires=[
         "torch>=2.3.0",
@@ -15,6 +14,7 @@ setup(
         "pytorch-metric-learning>=2.0.0",
         "scipy>=1.10.0",
         "matplotlib>=3.8.0",
+        "retrying>=1.3.3",
     ],
     author="Carson Wu",
     author_email="carson.developer1125@gmail.com",

@@ -1,4 +1,4 @@
-from lepaute import main, load_data
+from main import main, load_data
 import asyncio
 import logging
 
@@ -6,7 +6,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 
 # Run the pipeline
-asyncio.run(main())
+asyncio.run(main(display_mode="gui,realtime", save_json=True, save_image=True))
 
 # Access data
 data = load_data()

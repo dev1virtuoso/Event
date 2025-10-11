@@ -2,7 +2,7 @@ import asyncio
 import os
 import cv2
 import numpy as np
-from LEPAUTE import main, get_collected_data
+from main import main, get_collected_data
 from data_access import load_data
 import multiprocessing
 import logging
@@ -49,10 +49,9 @@ if __name__ == "__main__":
     frames_dir = "frames"
     os.makedirs(frames_dir, exist_ok=True)
     
-    # Configure mode and options
-    mode = "realtime"  # Ensures real-time camera windows
-    save_json = True   # Save data to lepaute_data.json
-    save_image = True  # Save frames to frames_dir
+    mode = "realtime"
+    save_json = True
+    save_image = True
     
     print(f"Running in {mode.upper()} mode...")
     print(f"Save JSON: {save_json}, Save Image: {save_image}")
