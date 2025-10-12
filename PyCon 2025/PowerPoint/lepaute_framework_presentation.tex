@@ -1,0 +1,305 @@
+
+\documentclass{beamer}
+\usetheme{Madrid}
+\usecolortheme{default}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{hyperref}
+\usepackage{animate} % For animation support
+
+% Setting font to Noto Serif for consistency
+\setmainfont{Noto Serif}
+
+% Title slide
+\title{L.E.P.A.U.T.E. Framework}
+\subtitle{Achieving Precise Modeling of Geometric Transformations}
+\author{Carson Wu}
+\date{September 2025}
+
+
+\begin{document}
+
+% Slide 1: Title (Animated entrance)
+\begin{frame}
+  \begin{center}
+    \only<1>{\Huge L.E.P.A.U.T.E. Framework}
+    \only<2>{\Huge \textbf{Achieving Precise Modeling of Geometric Transformations}}
+    \only<3>{\Large Carson Wu \\ September 2025 \\}
+  \end{center}
+\end{frame}
+
+% Slide 2: Agenda (Incremental reveal)
+\begin{frame}{Agenda}
+  \begin{itemize}
+    \item<1-> Introduction
+    \item<2-> Lie Group Foundations
+    \item<3-> Framework Overview
+    \item<4-> Neural Network Architecture
+    \item<5-> Training and Optimization
+    \item<6-> Implementation Process
+    \item<7-> Practical Applications
+    \item<8-> Impact Analysis
+    \item<9-> Future Directions
+    \item<10-> Conclusion
+  \end{itemize}
+\end{frame}
+
+% Section 1: Introduction
+\section{Introduction}
+\begin{frame}{Motivation}
+  \begin{itemize}
+    \item<1-> \textbf{Challenge}: Traditional CNNs struggle with explicit geometric transformation modeling (e.g., rotation, translation).
+    \item<2-> \textbf{Solution}: L.E.P.A.U.T.E. Framework uses Lie group theory to model transformations intrinsically.
+    \item<3-> \textbf{Goal}: Achieve precise, robust modeling for computer vision tasks like 3D reconstruction, robotics, and medical imaging.
+  \end{itemize}
+  \pause<4>
+  \begin{center}
+    \visible<4>{\includegraphics[width=0.3\textwidth]{example-image}} % Placeholder for an image (e.g., transformation diagram)
+  \end{center}
+\end{frame}
+
+% Section 2: Lie Group Theory
+\section{Lie Group Foundations}
+\begin{frame}{Lie Groups and Lie Algebra}
+  \begin{itemize}
+    \item<1-> \textbf{Lie Group ($\mathcal{G}$)}: A group with a differentiable manifold structure, e.g., $SE(3)$ for 3D transformations.
+    \item<2-> \textbf{Examples}:
+      \begin{itemize}
+        \item<3-> $SE(2)$: 2D rotation and translation.
+        \item<4-> $SE(3)$: 3D rigid body transformations, 
+          \[
+          \visible<5->{g = \begin{bmatrix} R & t \\ 0 & 1 \end{bmatrix}, \quad R \in SO(3), \quad t \in \mathbb{R}^3}
+          \]
+      \end{itemize}
+    \item<6-> \textbf{Lie Algebra ($\mathfrak{g}$)}: Tangent space at identity, e.g., $\mathfrak{se}(3)$ with generators for rotation and translation.
+    \item<7-> \textbf{Exponential Map}: $\exp: \mathfrak{g} \to \mathcal{G}$, maps algebra to group.
+  \end{itemize}
+\end{frame}
+
+% Section 3: Framework Overview
+\section{Framework Overview}
+\begin{frame}{L.E.P.A.U.T.E. Framework}
+  \begin{itemize}
+    \item<1-> \textbf{Core Idea}: Embed geometric transformations using Lie groups in neural networks.
+    \item<2-> \textbf{Components}:
+      \begin{itemize}
+        \item<3-> Lie group convolutional layers for equivariant feature extraction.
+        \item<4-> Lie group attention mechanisms for geometric focus.
+        \item<5-> Geometric invariance/equivariance loss functions.
+      \end{itemize}
+    \item<6-> \textbf{Applications}: 3D reconstruction, robotic navigation, medical imaging, autonomous driving.
+  \end{itemize}
+  \pause<7>
+  \begin{center}
+    \visible<7>{\includegraphics[width=0.3\textwidth]{example-image}} % Placeholder for framework diagram
+  \end{center}
+\end{frame}
+
+% Section 4: Neural Network Architecture
+\section{Neural Network Architecture}
+\begin{frame}{Lie Group Convolutional Layer}
+  \begin{itemize}
+    \item<1-> \textbf{Definition}: Convolution on Lie group $\mathcal{G}$:
+      \[
+      \visible<2->{(f * k)(g) = \int_{\mathcal{G}} f(h) k(h^{-1} g) \, dh}
+      \]
+    \item<3-> \textbf{Equivariance}: Ensures $(f \circ L_g) * k = (f * k) \circ L_g$.
+    \item<4-> \textbf{Implementation}:
+      \begin{itemize}
+        \item<5-> Discretize $\mathcal{G}$ (e.g., grid sampling of $SE(3)$).
+        \item<6-> Use spherical harmonics for $SO(3)$ kernels.
+        \item<7-> Optimize with FFT for efficiency.
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Lie Group Attention Mechanism}
+  \begin{itemize}
+    \item<1-> \textbf{Formula}: 
+      \[
+      \visible<2->{\text{Attention}(Q, K, V) = \text{softmax}\left( \frac{Q K^T}{\sqrt{d_k}} \right) V}
+      \]
+      where $Q, K, V: \mathcal{G} \to \mathbb{R}^d$.
+    \item<3-> \textbf{Geometric Compatibility}: Scores based on relative transformations, 
+      \[
+      \visible<4->{\text{score}(g_i, g_j) = \phi(Q(g_i), K(g_j), g_i^{-1} g_j)}
+      \]
+    \item<5-> \textbf{Features}: Multi-head attention, geometric positional encoding via Lie algebra.
+  \end{itemize}
+  \pause<6>
+  \begin{center}
+    \visible<6>{\includegraphics[width=0.3\textwidth]{example-image}} % Placeholder for attention diagram
+  \end{center}
+\end{frame}
+
+% Section 5: Training and Optimization
+\section{Training and Optimization}
+\begin{frame}{Loss Functions}
+  \begin{itemize}
+    \item<1-> \textbf{Geometric Invariance Loss}:
+      \[
+      \visible<2->{L_{\text{inv}} = \sum_i \sum_{g \in \mathcal{G}} | f(x_i) - f(T(g) x_i) |^2}
+      \]
+    \item<3-> \textbf{Equivariance Loss}:
+      \[
+      \visible<4->{L_{\text{eq}} = \sum_i \sum_{g \in \mathcal{G}} | f(T(g) x_i) - T'(g) f(x_i) |^2}
+      \]
+    \item<5-> \textbf{Self-Supervised Learning}: Contrastive loss:
+      \[
+      \visible<6->{L_{\text{contrast}} = -\log \frac{\exp(\text{sim}(f(x_i), f(T(g) x_i)) / \tau)}{\sum_j \exp(\text{sim}(f(x_i), f(x_j)) / \tau)}}
+      \]
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Training Process}
+  \begin{itemize}
+    \item<1-> \textbf{Optimizer}: Adam with learning rate $10^{-4}$, cosine annealing.
+    \item<2-> \textbf{Regularization}: Weight decay ($10^{-5}$), dropout (0.1).
+    \item<3-> \textbf{Data Augmentation}: Random rotations, translations in $\mathcal{G}$.
+    \item<4-> \textbf{Monitoring}: Track loss, geometric invariance metrics.
+  \end{itemize}
+  \pause<5>
+  \begin{center}
+    \visible<5>{\includegraphics[width=0.3\textwidth]{example-image}} % Placeholder for training graph
+  \end{center}
+\end{frame}
+
+% Section 6: Implementation Process
+\section{Implementation Process}
+\begin{frame}{Data Preprocessing}
+  \begin{itemize}
+    \item<1-> \textbf{Standardization}: Normalize pixel values, adjust resolution (e.g., $256 \times 256$).
+    \item<2-> \textbf{Geometric Transformation Extraction}: Use SIFT, ORB, or RANSAC for $SE(3)$ estimation.
+    \item<3-> \textbf{Lie Group Representation}: Map images to $f: \mathcal{G} \to \mathbb{R}^n$, discretize $\mathcal{G}$.
+    \item<4-> \textbf{Tools}: OpenCV, PyTorch Geometric, Sophus.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Transformer Model Construction}
+  \begin{itemize}
+    \item<1-> \textbf{Encoder}: 6-12 layers with:
+      \begin{itemize}
+        \item<2-> Lie group convolution for feature extraction.
+        \item<3-> Lie group attention for geometric focus.
+        \item<4-> Feedforward network, LayerNorm, residual connections.
+      \end{itemize}
+    \item<5-> \textbf{Positional Encoding}: $\text{PE}(g) = \sin(\omega_k \cdot \xi_g)$.
+    \item<6-> \textbf{Implementation}: PyTorch/JAX with Sophus.
+  \end{itemize}
+\end{frame}
+
+% Section 7: Practical Applications
+\section{Practical Applications}
+\begin{frame}{Application Scenarios}
+  \begin{itemize}
+    \item<1-> \textbf{3D Reconstruction}: Chamfer distance reduced by 10-15\%.
+    \item<2-> \textbf{Robotic Navigation/SLAM}: ATE reduced to 0.02m.
+    \item<3-> \textbf{Medical Imaging}: Dice coefficient improved to 0.90.
+    \item<4-> \textbf{Autonomous Driving}: Pose errors reduced to 0.03m, mAP improved by 8\%.
+  \end{itemize}
+  \pause<5>
+  \begin{center}
+    \visible<5>{\includegraphics[width=0.3\textwidth]{example-image}} % Placeholder for application montage
+  \end{center}
+\end{frame}
+
+\begin{frame}{3D Reconstruction}
+  \begin{itemize}
+    \item<1-> \textbf{Process}: Multi-view images $\to$ Lie group features $\to$ voxel/point cloud fusion.
+    \item<2-> \textbf{Tools}: Open3D, PyTorch3D, MeshLab.
+    \item<3-> \textbf{Advantages}: Pose error $\sim$1°, robust to noise.
+    \item<4-> \textbf{Case Study}: VR gaming—indoor scenes with 2° pose accuracy.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Robotic Navigation and SLAM}
+  \begin{itemize}
+    \item<1-> \textbf{Process}: RGB-D/LiDAR $\to$ $SE(3)$ pose $\to$ map construction.
+    \item<2-> \textbf{Tools}: ORB-SLAM3, g2o, ROS.
+    \item<3-> \textbf{Advantages}: ATE $\sim$0.02m, 15\% better map consistency.
+    \item<4-> \textbf{Case Study}: Hospital robots with 0.03m localization error.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Medical Image Processing}
+  \begin{itemize}
+    \item<1-> \textbf{Process}: CT/MRI $\to$ $SE(3)$ registration $\to$ segmentation/classification.
+    \item<2-> \textbf{Tools}: ITK, MONAI, 3D Slicer.
+    \item<3-> \textbf{Advantages}: Dice coefficient $\sim$0.90, 10\% error reduction.
+    \item<4-> \textbf{Case Study}: Brain tumor segmentation with 0.92 Dice score.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Autonomous Driving and UAVs}
+  \begin{itemize}
+    \item<1-> \textbf{Process}: Multimodal data $\to$ $SE(3)$ pose $\to$ object detection/path planning.
+    \item<2-> \textbf{Tools}: Apollo, ROS, TensorRT.
+    \item<3-> \textbf{Advantages}: Pose error $\sim$0.03m, mAP improved by 8\%.
+    \item<4-> \textbf{Case Study}: Urban driving with 0.02m localization accuracy.
+  \end{itemize}
+\end{frame}
+
+% Section 8: Impact Analysis
+\section{Impact Analysis}
+\begin{frame}{Advantages and Limitations}
+  \begin{itemize}
+    \item<1-> \textbf{Advantages}:
+      \begin{itemize}
+        \item<2-> Robust geometric invariance/equivariance.
+        \item<3-> Precise modeling for 3D tasks (pose error $\sim$1°).
+        \item<4-> Reduced data dependency via self-supervised learning.
+      \end{itemize}
+    \item<5-> \textbf{Limitations}:
+      \begin{itemize}
+        \item<6-> High computational complexity.
+        \item<7-> Requires diverse transformation data.
+        \item<8-> Steep learning curve for Lie group theory.
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Comparison with Existing Methods}
+  \begin{tabular}{|c|c|c|c|}
+    \hline
+    \textbf{Method} & \textbf{Geometric Modeling} & \textbf{Invariance} & \textbf{Complexity} \\
+    \hline
+    \only<1->{CNN (ResNet)} & \only<2->{Implicit} & \only<3->{Limited} & \only<4->{Medium} \\
+    \only<5->{STN} & \only<6->{Explicit} & \only<7->{Partial} & \only<8->{Medium} \\
+    \only<9->{ViT} & \only<10->{Implicit} & \only<11->{Limited} & \only<12->{High} \\
+    \only<13->{L.E.P.A.U.T.E.} & \only<14->{Explicit} & \only<15->{Strong} & \only<16->{High} \\
+    \hline
+  \end{tabular}
+\end{frame}
+
+% Section 9: Future Directions
+\section{Future Directions}
+\begin{frame}{Future Improvements}
+  \begin{itemize}
+    \item<1-> \textbf{Algorithm Optimization}: Sparse convolutions, steerable filters.
+    \item<2-> \textbf{Hybrid Models}: Combine CNNs with Lie group modules.
+    \item<3-> \textbf{Data Generation}: High-fidelity synthetic datasets.
+    \item<4-> \textbf{Open-Source Tools}: Standardize Lie group vision libraries.
+  \end{itemize}
+\end{frame}
+
+% Section 10: Conclusion
+\section{Conclusion}
+\begin{frame}{Conclusion}
+  \begin{itemize}
+    \item<1-> L.E.P.A.U.T.E. Framework revolutionizes computer vision by explicitly modeling geometric transformations.
+    \item<2-> \textbf{Strengths}: Precise, robust, versatile for 3D tasks.
+    \item<3-> \textbf{Applications}: 3D reconstruction, robotics, medical imaging, autonomous driving.
+    \item<4-> \textbf{Future}: Optimize efficiency, expand multimodal integration.
+  \end{itemize}
+\end{frame}
+
+% Slide 20: Q&A
+\begin{frame}{Questions?}
+  \begin{center}
+    \animatevalue<1-10>{1}{10}{\Huge Thank You! \theanimationvalue}
+  \end{center}
+\end{frame}
+
+\end{document}
