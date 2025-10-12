@@ -73,92 +73,161 @@ class DynamicResourceManager:
         
         return self.dynamic_delay
 
+class GeometricTransformationError(Exception):
+    """Base exception for transformation estimation failures."""
+    pass
+
 class GeometricTransformationExtraction:
-    def __init__(self):
-        self.local_feature = K.feature.LocalFeature(
-            detector=K.feature.DISK().to(DEVICE),
-            descriptor=K.feature.SIFTDescriptor(patch_size=32).to(DEVICE)
-        ).to(DEVICE)
-        self.orb = cv2.ORB_create(nfeatures=5000, scaleFactor=1.2, nlevels=8, edgeThreshold=5)
+    def __init__(self, var_threshold: float = 0.02, match_threshold: float = 0.9):
+        """
+        Initializes the transformation extraction module.
+
+        Args:
+            var_threshold (float): Minimum variance for images to be processed by the GPU pipeline.
+            match_threshold (float): Threshold for feature matching.
+        """
+        self.var_threshold = var_threshold
+        self.match_threshold = match_threshold
+        
+        # GPU-native feature extractor and matcher
+        self.local_feature = K.feature.DISK().to(DEVICE).eval()
+        self.matcher = K.feature.DescriptorMatcher('snn', self.match_threshold).to(DEVICE).eval()
+        self.ransac = K.geometry.RANSAC('homography', inliers_threshold=5.0, max_iterations=50).to(DEVICE).eval()
+
+        # CPU-based fallback components
+        self.orb = cv2.ORB_create(nfeatures=2000, scaleFactor=1.2, nlevels=8)
         self.bf_matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
 
-    def extract_2d_transform(self, image1: torch.Tensor, image2: torch.Tensor) -> torch.Tensor:
-        image1, image2 = image1.to(DEVICE, DTYPE), image2.to(DEVICE, DTYPE)
-        rgb1, rgb2 = image1.unsqueeze(0), image2.unsqueeze(0)
+    def _parse_kornia_features(self, features: dict) -> tuple[torch.Tensor, torch.Tensor]:
+        """Parses the output of a Kornia feature detector."""
+        if not all(k in features for k in ['keypoints', 'descriptors']):
+            raise GeometricTransformationError("Kornia feature output missing 'keypoints' or 'descriptors'.")
         
-        img1_np = (image1.permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
-        img2_np = (image2.permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
-        img1_var, img2_var = img1_np.std(), img2_np.std()
-        if img1_var < 0.02 or img2_var < 0.02:
-            logger.debug("Low image variance, using ORB fallback")
-            return self._orb_fallback(img1_np, img2_np)
-        
-        try:
-            feats1 = self.local_feature(rgb1)
-            feats2 = self.local_feature(rgb2)
-            # Handle varying output formats from kornia.feature.LocalFeature
-            if isinstance(feats1, (tuple, list)) and len(feats1) >= 2:
-                keypoints1 = K.feature.get_laf_center(feats1[0])
-                descriptors1 = feats1[2] if len(feats1) > 2 else feats1[1]
-            else:
-                logger.debug("Unexpected feature output format, falling back to ORB")
-                return self._orb_fallback(img1_np, img2_np)
-            
-            if isinstance(feats2, (tuple, list)) and len(feats2) >= 2:
-                keypoints2 = K.feature.get_laf_center(feats2[0])
-                descriptors2 = feats2[2] if len(feats2) > 2 else feats2[1]
-            else:
-                logger.debug("Unexpected feature output format, falling back to ORB")
-                return self._orb_fallback(img1_np, img2_np)
-            
-            if keypoints1 is None or descriptors1 is None or keypoints2 is None or descriptors2 is None:
-                logger.debug("Invalid feature output, using ORB fallback")
-                return self._orb_fallback(img1_np, img2_np)
-            
-            matches = custom_match_nn(descriptors1, descriptors2, threshold=0.9)
-            if matches.shape[0] < 4:
-                logger.debug("Insufficient matches, using ORB fallback")
-                return self._orb_fallback(img1_np, img2_np)
-            
-            src_pts = keypoints1[0][matches[:, 0]].cpu().numpy()
-            dst_pts = keypoints2[0][matches[:, 1]].cpu().numpy()
-            H, _ = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
-            if H is None:
-                logger.debug("Homography estimation failed, using ORB fallback")
-                return self._orb_fallback(img1_np, img2_np)
-            
-            H = torch.from_numpy(H).to(DEVICE, DTYPE)
-            det = H[0, 0] * H[1, 1] - H[0, 1] * H[1, 0]
-            if abs(det) < 1e-8:
-                logger.debug("Singular homography, returning zero transform")
-                return torch.zeros(3, device=DEVICE, dtype=DTYPE)
-            theta = torch.atan2(H[1, 0], H[0, 0])
-            tx, ty = H[0, 2], H[1, 2]
-            return torch.tensor([theta, tx, ty], device=DEVICE, dtype=DTYPE)
-        except Exception as e:
-            logger.warning(f"Feature extraction failed: {e}, using ORB fallback")
-            return self._orb_fallback(img1_np, img2_np)
+        keypoints = features['keypoints']
+        descriptors = features['descriptors']
 
-    def _orb_fallback(self, img1: np.ndarray, img2: np.ndarray) -> torch.Tensor:
-        img1_gray = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
-        img2_gray = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
-        kp1, des1 = self.orb.detectAndCompute(img1_gray, None)
-        kp2, des2 = self.orb.detectAndCompute(img2_gray, None)
-        if des1 is None or des2 is None or len(kp1) < 4 or len(kp2) < 4:
-            logger.debug("ORB fallback failed: insufficient keypoints")
-            return torch.zeros(3, device=DEVICE, dtype=DTYPE)
-        matches = self.bf_matcher.match(des1, des2)
-        matches = sorted(matches, key=lambda x: x.distance)[:500]
-        src_pts = np.float32([kp1[m.queryIdx].pt for m in matches])
-        dst_pts = np.float32([kp2[m.trainIdx].pt for m in matches])
-        H, _ = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
-        if H is None:
-            logger.debug("ORB homography estimation failed")
-            return torch.zeros(3, device=DEVICE, dtype=DTYPE)
-        H = torch.from_numpy(H).to(DEVICE, DTYPE)
+        if keypoints.shape[1] < 4 or descriptors.shape[1] < 4:
+            raise GeometricTransformationError(f"Insufficient features found: {keypoints.shape[1]} keypoints.")
+            
+        return keypoints, descriptors
+
+    def _extract_gpu_transform(self, image1: torch.Tensor, image2: torch.Tensor) -> torch.Tensor:
+        """
+        Performs transformation estimation entirely on the GPU using Kornia.
+        Raises a TransformationError subclass on failure.
+        """
+        # 1. Pre-check: Image Variance
+        if image1.std() < self.var_threshold or image2.std() < self.var_threshold:
+            raise GeometricTransformationError(f"Image variance below threshold {self.var_threshold}.")
+
+        # 2. Feature Detection (GPU)
+        # Kornia expects grayscale images for DISK, shape (B, 1, H, W)
+        gray1 = K.color.rgb_to_grayscale(image1.unsqueeze(0))
+        gray2 = K.color.rgb_to_grayscale(image2.unsqueeze(0))
+        
+        with torch.no_grad():
+            feats1 = self.local_feature(gray1)
+            feats2 = self.local_feature(gray2)
+        
+        # 3. Feature Parsing & Matching (GPU)
+        kps1, descs1 = self._parse_kornia_features(feats1)
+        kps2, descs2 = self._parse_kornia_features(feats2)
+
+        distances, indices = self.matcher(descs1, descs2)
+        if indices.shape[0] < 4:
+            raise GeometricTransformationError(f"Insufficient matches found: {indices.shape[0]}.")
+            
+        # 4. Homography Estimation with RANSAC (GPU)
+        src_pts = kps1[indices[:, 0], :, 2]  # Kornia keypoints format: (B, N, 4) -> (angle, scale, x, y)
+        dst_pts = kps2[indices[:, 1], :, 2]  # We need the xy coordinates at index 2
+
+        try:
+            H, _ = self.ransac(src_pts, dst_pts)
+            if H is None:
+                raise GeometricTransformationError("Kornia RANSAC returned None.")
+        except Exception as e:
+            raise GeometricTransformationError(f"Kornia RANSAC failed with error: {e}") from e
+
+        # 5. Decompose Homography to SE(2) parameters
+        det = H[0, 0] * H[1, 1] - H[0, 1] * H[1, 0]
+        if abs(det) < 1e-8:
+            # A singular homography is a failure case
+            raise GeometricTransformationError("Singular homography matrix cannot be decomposed.")
+            
         theta = torch.atan2(H[1, 0], H[0, 0])
         tx, ty = H[0, 2], H[1, 2]
+        
         return torch.tensor([theta, tx, ty], device=DEVICE, dtype=DTYPE)
+
+    def _orb_fallback(self, image1_tensor: torch.Tensor, image2_tensor: torch.Tensor) -> torch.Tensor:
+        """CPU-based fallback using OpenCV ORB."""
+        # --- Conversion from Tensor to NumPy happens ONLY here ---
+        img1_np = (image1_tensor.permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
+        img2_np = (image2_tensor.permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
+
+        img1_gray = cv2.cvtColor(img1_np, cv2.COLOR_RGB2GRAY)
+        img2_gray = cv2.cvtColor(img2_np, cv2.COLOR_RGB2GRAY)
+        
+        kp1, des1 = self.orb.detectAndCompute(img1_gray, None)
+        kp2, des2 = self.orb.detectAndCompute(img2_gray, None)
+
+        if des1 is None or des2 is None or len(kp1) < 4 or len(kp2) < 4:
+            logger.debug("ORB fallback failed: insufficient keypoints.")
+            return torch.zeros(3, device=DEVICE, dtype=DTYPE)
+        
+        matches = self.bf_matcher.match(des1, des2)
+        matches = sorted(matches, key=lambda x: x.distance)[:min(500, len(matches))]
+        
+        if len(matches) < 4:
+            logger.debug("ORB fallback failed: insufficient matches after sorting.")
+            return torch.zeros(3, device=DEVICE, dtype=DTYPE)
+
+        src_pts = np.float32([kp1[m.queryIdx].pt for m in matches])
+        dst_pts = np.float32([kp2[m.trainIdx].pt for m in matches])
+        
+        H, _ = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+
+        if H is None:
+            logger.debug("ORB homography estimation failed.")
+            return torch.zeros(3, device=DEVICE, dtype=DTYPE)
+            
+        H = torch.from_numpy(H).to(device=DEVICE, dtype=DTYPE)
+        theta = torch.atan2(H[1, 0], H[0, 0])
+        tx, ty = H[0, 2], H[1, 2]
+        
+        return torch.tensor([theta, tx, ty], device=DEVICE, dtype=DTYPE)
+
+    def extract_2d_transform(self, image1: torch.Tensor, image2: torch.Tensor) -> torch.Tensor:
+        """
+        Estimates the 2D transformation (SE(2)) between two images.
+        
+        Tries a fast, GPU-native approach first. If it fails, falls back to a 
+        CPU-based ORB method.
+
+        Args:
+            image1 (torch.Tensor): The first image tensor (C, H, W) on DEVICE.
+            image2 (torch.Tensor): The second image tensor (C, H, W) on DEVICE.
+
+        Returns:
+            torch.Tensor: A 3-element tensor [theta, tx, ty] representing the transformation.
+                          Returns a zero tensor on complete failure.
+        """
+        try:
+            # --- Happy Path: Attempt GPU-native extraction ---
+            lie_params = self._extract_gpu_transform(image1, image2)
+            logger.debug("GPU-native transform extraction successful.")
+            return lie_params
+        except GeometricTransformationError as e:
+            # --- Sad Path: Controlled fallback on known errors ---
+            logger.debug(f"GPU transform failed: {e}. Falling back to CPU/ORB.")
+            return self._orb_fallback(image1, image2)
+        except Exception as e:
+            # --- Catastrophic Path: Catch unexpected errors ---
+            logger.warning(
+                f"An unexpected error occurred during GPU transform: {e}. "
+                "Falling back to CPU/ORB."
+            )
+            return self._orb_fallback(image1, image2)
 
 class MultiModalProcessor:
     def __init__(self):
