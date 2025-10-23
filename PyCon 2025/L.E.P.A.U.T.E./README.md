@@ -100,6 +100,12 @@ python3 example.py
 - "scipy>=1.10.0",
 - "matplotlib>=3.8.0",
 
+## Additional contributors
+
+### PyCon HK 2025
+- Primary contributor: [shz2](https://twitter.com/shivvor2)
+- Special thanks to: [BenBenCHAK](https://github.com/BenBenCHAK), [usertam](https://github.com/usertam)
+
 ## Notes
 
 - Ensure webcam access for real-time data collection.
