@@ -27,7 +27,7 @@
     let total_pages = counter(page).final().first()
     if page_num > 1 {
       line(length: 100%, stroke: 0.5pt + rgb("#cbd5e1"))
-      v(0.3em)
+      v(-0.5em)
       grid(
         columns: (1fr, auto),
         text(fill: rgb("#94a3b8"), size: 0.7em)[June 27, 2026],
