@@ -214,7 +214,6 @@
   export LEPAUTE_DEVICE="cuda"
   export LEPAUTE_MAX_DISK_FILES=2000
   export LEPAUTE_MODE="autonomous"
-
 ```
 
 If you want to look at the raw matrix values spitting out of the geometric layers in real time, simply drop the logging level down to Debug.
@@ -233,7 +232,6 @@ stream = CameraIOStream(device_index=0, mode="autonomous")
 
 worker = InferenceWorker(source=stream)
 worker.start()
-
 ```
 
 ]
