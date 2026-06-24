@@ -15,8 +15,6 @@ This guide provides step-by-step instructions for setting up, configuring, and r
 | Storage Space | ~400–500 MB (for main pipeline only) | 90 GB (for training pipeline) |
 | Network | Active connection required | Stable broadband connection |
 
-This is a clean Markdown table based on the provided data. Copy and paste it directly into your `.md` file.
-
 > * **Note on Apple Silicon:** The PyTorch MPS (Metal Performance Shaders) backend is supported but may display instability depending on your specific environment environment.
 
 ## Installation and Setup
