@@ -1,0 +1,193 @@
+{
+    "ci_timestamp": 1793025013.94653,
+    "model_version_hash": "5f1dc2e67869674ccecb99d76d45adcad5c8df32082e7e23abfeac61afe7cd88",
+    "model_hash_source": "state_dict_fallback",
+    "environment": {
+        "device": "mps",
+        "performance_mode": "high",
+        "python": "3.13.14",
+        "torch": "2.14.1",
+        "numpy": "2.5.3",
+        "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+        "cpu_count": 12,
+        "cuda_available": false,
+        "cuda_version": null,
+        "gpu_name": null,
+        "mps_available": true,
+        "warmup_iters": 10,
+        "timing_method": "perf_counter + device_synchronize"
+    },
+    "geometry_accuracy": {
+        "overall_mse": {
+            "name": "mse",
+            "unit": "",
+            "count": 50,
+            "mean": 0.0027294529794016855,
+            "std": 0.0013723725307066633,
+            "min": 0.0003088965604547411,
+            "max": 0.006011588964611292,
+            "median": 0.0024634593864902854,
+            "p50": 0.0024634593864902854,
+            "p90": 0.004827629961073399,
+            "p95": 0.005528758978471157,
+            "p99": 0.0059696085937321185
+        },
+        "rotation_mse": {
+            "name": "rotation_mse",
+            "unit": "",
+            "count": 50,
+            "mean": 0.0024569288542988944,
+            "std": 0.0017447432773249854,
+            "min": 4.6720528189325705e-05,
+            "max": 0.008934962563216686,
+            "median": 0.002129052998498082,
+            "p50": 0.002129052998498082,
+            "p90": 0.004739472270011903,
+            "p95": 0.006011888943612575,
+            "p99": 0.007569876513443882
+        },
+        "translation_mse": {
+            "name": "translation_mse",
+            "unit": "",
+            "count": 50,
+            "mean": 0.003001977127278224,
+            "std": 0.0022700971303172154,
+            "min": 0.0001982704270631075,
+            "max": 0.009185357950627804,
+            "median": 0.002313135424628854,
+            "p50": 0.002313135424628854,
+            "p90": 0.006403286615386606,
+            "p95": 0.007743046176619826,
+            "p99": 0.009005975741893052
+        }
+    },
+    "convergence": {
+        "total_frames": 50,
+        "refined_ratio": 1.0,
+        "tracker_ratio": 0.0,
+        "recovery_ratio": 0.0,
+        "success_rate_mse_lt_0.01": 1.0,
+        "failure_rate_mse_gt_0.1": 0.0
+    },
+    "refinement_estimates": {
+        "delta_xi_norm": {
+            "name": "delta_xi_norm",
+            "unit": "",
+            "count": 50,
+            "mean": 0.0,
+            "std": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "median": 0.0,
+            "p50": 0.0,
+            "p90": 0.0,
+            "p95": 0.0,
+            "p99": 0.0
+        },
+        "delta_scale": {
+            "name": "delta_scale",
+            "unit": "",
+            "count": 50,
+            "mean": 0.0,
+            "std": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "median": 0.0,
+            "p50": 0.0,
+            "p90": 0.0,
+            "p95": 0.0,
+            "p99": 0.0
+        },
+        "unc_pose": {
+            "name": "unc_pose",
+            "unit": "",
+            "count": 50,
+            "mean": 0.0,
+            "std": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "median": 0.0,
+            "p50": 0.0,
+            "p90": 0.0,
+            "p95": 0.0,
+            "p99": 0.0
+        },
+        "unc_scale": {
+            "name": "unc_scale",
+            "unit": "",
+            "count": 50,
+            "mean": 0.0,
+            "std": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "median": 0.0,
+            "p50": 0.0,
+            "p90": 0.0,
+            "p95": 0.0,
+            "p99": 0.0
+        }
+    },
+    "uncertainty_calibration": {},
+    "latency_profiling_ms": {
+        "SE3ResidualRefiner_Inference": {
+            "name": "SE3ResidualRefiner_Inference",
+            "unit": "ms",
+            "count": 50,
+            "mean": 7.101229946129024,
+            "std": 5.646938629251231,
+            "min": 4.556457977741957,
+            "max": 44.96420896612108,
+            "median": 6.287166499532759,
+            "p50": 6.287166499532759,
+            "p90": 8.20474596694112,
+            "p95": 9.903578925877806,
+            "p99": 29.15088784648099
+        }
+    },
+    "throughput": {
+        "frames": 50,
+        "mean_latency_ms": 7.101229946129024,
+        "median_latency_ms": 6.287166499532759,
+        "p95_latency_ms": 9.903578925877806,
+        "p99_latency_ms": 29.15088784648099,
+        "fps_from_mean": 140.82067579646727,
+        "fps_from_median": 159.05416216897018,
+        "fps_from_p95": 100.97359828041809,
+        "fps_wall_clock": 71.00318202579778,
+        "total_wall_time_s": 0.7041937920730561,
+        "total_inference_time_s": 0.3550614973064512
+    },
+    "boundary_stability": {
+        "pi_angle_mse": 1.1963763313360687e-12,
+        "tiny_angle_mse": 0.0
+    },
+    "mode_arbitration": {
+        "deep_learning_refined": 50,
+        "direct_alignment_tracker": 0,
+        "orb_kinematic_recovery": 0
+    },
+    "cross_system_comparison": {
+        "ORB-SLAM3": {
+            "mse_ratio_vs_this": 16.486820011042763,
+            "fps_ratio_vs_this": 5.301805405632339,
+            "latency_ratio_vs_this": 3.362420822737922,
+            "_note": "all ratios >1 = this system better; baselines are placeholders unless replaced"
+        },
+        "DROID-SLAM": {
+            "mse_ratio_vs_this": 4.3964853362780705,
+            "fps_ratio_vs_this": 15.905416216897018,
+            "latency_ratio_vs_this": 10.097359828041808,
+            "_note": "all ratios >1 = this system better; baselines are placeholders unless replaced"
+        },
+        "TartanVO": {
+            "mse_ratio_vs_this": 24.913416905575733,
+            "fps_ratio_vs_this": 7.952708108448509,
+            "latency_ratio_vs_this": 5.048679914020904,
+            "_note": "all ratios >1 = this system better; baselines are placeholders unless replaced"
+        }
+    },
+    "warnings": [
+        "Only 50 frames loaded (< 100). P99 is effectively max(); treat tail statistics with caution."
+    ],
+    "per_frame_count": 50
+}
