@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Small amount of hand-written CSS that Tailwind utilities express poorly. */
+@layer base {
+  html,
+  body {
+    @apply bg-bg text-text font-sans antialiased;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-panelalt;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-edge rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted;
+  }
+}
+
+@layer components {
+  /* Probability bar row: label / track / value */
+  .prob-bar {
+    @apply h-2 rounded-full bg-panelalt overflow-hidden;
+  }
+
+  .prob-fill {
+    @apply h-full rounded-full bg-edge transition-all duration-500 ease-out;
+  }
+
+  .prob-fill-win {
+    @apply bg-accent;
+  }
+}
