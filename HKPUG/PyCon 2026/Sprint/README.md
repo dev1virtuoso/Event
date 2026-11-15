@@ -56,10 +56,14 @@ gantt
 
 3. `cd ./HKPUG/PyCon 2026/Sprint`
 
-4. create a py venv via uv, `uv init`
+4. create a py venv,
+`
+python3 -m venv .venv313
+source .venv313/bin/activate
+`
 
-5. `uv add ollama pygame opencv-python pathlib numpy json --frozen`
+8. `pip install ollama pygame opencv-python pathlib numpy json --frozen`
 
-6. Try the demo script to verify your env, `uv run snake_clef.py`
+9. Try the demo script to verify your env, `python -m snake_clef.py`
 
 If you have any question, advice, or topic want to discuss with us, please don't hesitate to reach out. Thanks a lot.
