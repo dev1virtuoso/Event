@@ -1,4 +1,3 @@
-cat << 'EOF' > image_clef.py
 #!/usr/bin/env python3
 """
 圖片拖放決策分析器 (Drag-and-Drop Vision Decision Tool)
