@@ -8,8 +8,6 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "cv2",
-    "json",
     "numpy",
     "ollama",
     "opencv-python",
