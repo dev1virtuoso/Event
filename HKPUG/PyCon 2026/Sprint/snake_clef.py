@@ -3,6 +3,12 @@
 極速 + 超穩版貪食蛇（clef-flash）
 """
 
+import os
+
+# === Put your remote Ollama host config here (MUST be before `import ollama`) ===
+REMOTE_OLLAMA_HOST = "http://127.0.0.1:11434"  # <-- 改成你的遠端 IP
+os.environ["OLLAMA_HOST"] = REMOTE_OLLAMA_HOST
+
 import pygame
 import random
 import ollama
