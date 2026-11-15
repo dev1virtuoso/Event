@@ -4,7 +4,6 @@ import base64
 import shutil
 import tempfile
 import subprocess
-import threading
 from pathlib import Path
 from flask import Flask, request, jsonify, render_template_string
 
@@ -110,10 +109,11 @@ def api_analyze_image():
     
     try:
         decision = call_clef_flash_decision(str(img_path), f"Image file: {file.filename}.")
-        # 讀取圖片轉 base64 用於前端預覽
         img_b64 = encode_image_base64(str(img_path))
         return jsonify({"status": "success", "decision": decision, "image_b64": img_b64})
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -131,24 +131,40 @@ def api_analyze_video():
     try:
         video_path = url_or_path
         if url_or_path.startswith("http"):
-            # 下載 YouTube
             out_tpl = str(temp_dir / "video.%(ext)s")
-            res = subprocess.run(["yt-dlp", "-f", "mp4", "-o", out_tpl, url_or_path], capture_output=True, text=True)
+            # 修正 yt-dlp 指令，加上 timeout 避免卡死
+            try:
+                res = subprocess.run(
+                    [
+                        "yt-dlp", 
+                        "--no-playlist", 
+                        "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best", 
+                        "--merge-output-format", "mp4", 
+                        "-o", out_tpl, 
+                        url_or_path
+                    ],
+                    capture_output=True, text=True, timeout=120
+                )
+            except subprocess.TimeoutExpired:
+                raise RuntimeError("yt-dlp 下載超時（超過 120 秒）")
+            
             if res.returncode != 0:
-                raise RuntimeError("yt-dlp 下載失敗")
-            video_path = str(list(temp_dir.glob("video.*"))[0])
+                raise RuntimeError(f"yt-dlp 下載失敗：{res.stderr[-300:]}")
+            
+            videos = list(temp_dir.glob("video.*"))
+            if not videos:
+                raise RuntimeError("yt-dlp 下載完成但找不到檔案")
+            video_path = str(videos[0])
 
-        # 抽幀
         frame_files = extract_frames(video_path, frames_dir)
         if not frame_files:
-            raise RuntimeError("No frames extracted")
+            raise RuntimeError("沒有抽取到任何幀")
 
-        # 只回傳前 5 幀的分析結果（避免 Web 請求超時）
+        # 限制只處理前 5 幀，避免 Web 請求超時
         results = []
         for idx, frame_file in enumerate(frame_files[:5]):
             ts = idx * FRAME_INTERVAL_SECONDS
             decision = call_clef_flash_decision(str(frame_file), f"Video frame at {ts}s.")
-            # 將每一幀的圖片轉為 base64 讓前端預覽
             img_b64 = encode_image_base64(str(frame_file))
             results.append({
                 "frame_index": idx + 1,
@@ -159,12 +175,14 @@ def api_analyze_video():
 
         return jsonify({"status": "success", "results": results})
     except Exception as e:
+        import traceback
+        traceback.print_exc()  # 強制在終端機印出詳細錯誤
         return jsonify({"error": str(e)}), 500
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 # ============================================================
-# HTML/CSS/JS 前端模板
+# HTML/CSS/JS 前端模板 (保持不變，略過以節省空間)
 # ============================================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -385,19 +403,29 @@ HTML_TEMPLATE = """
             overflow-y: auto;
         }
         .hidden { display: none !important; }
-        .progress-bar {
-            width: 100%;
+        
+        .playback-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 15px;
+            font-family: monospace;
+            font-size: 13px;
+            color: var(--accent);
+        }
+        .timeline-bar {
+            flex: 1;
             height: 4px;
             background: #27272a;
             border-radius: 2px;
             overflow: hidden;
-            margin-top: 10px;
+            position: relative;
         }
-        .progress-fill {
+        .timeline-fill {
             height: 100%;
             background: var(--accent);
             width: 0%;
-            transition: width 0.3s;
+            transition: width 0.3s linear;
         }
     </style>
 </head>
@@ -415,7 +443,6 @@ HTML_TEMPLATE = """
     </div>
 
     <div class="main-container">
-        <!-- 左欄 -->
         <div class="left-col">
             <div class="panel">
                 <div class="panel-header">
@@ -432,6 +459,13 @@ HTML_TEMPLATE = """
                     <input type="text" id="url-input" placeholder="Enter YouTube URL or local video path...">
                     <button onclick="pasteClipboard()">Paste</button>
                     <button class="primary" onclick="analyzeVideo()">Analyze Video</button>
+                </div>
+
+                <div id="playback-controls" class="playback-controls hidden">
+                    <span id="playback-status">Playing Frame 1/1</span>
+                    <div class="timeline-bar">
+                        <div id="timeline-fill" class="timeline-fill"></div>
+                    </div>
                 </div>
             </div>
             
@@ -454,7 +488,6 @@ HTML_TEMPLATE = """
             </div>
         </div>
 
-        <!-- 右欄 -->
         <div class="right-col">
             <div class="panel" id="decision-output">
                 <div class="panel-header">
@@ -476,8 +509,12 @@ HTML_TEMPLATE = """
     </div>
 
     <script>
-        // 處理圖片上傳
+        let videoFramesData = [];
+        let playbackInterval = null;
+        let currentFrameIdx = 0;
+
         function handleImageUpload(event) {
+            stopPlayback();
             const file = event.target.files[0];
             if (!file) return;
             
@@ -491,7 +528,6 @@ HTML_TEMPLATE = """
             };
             reader.readAsDataURL(file);
             
-            // 發送到後端
             const formData = new FormData();
             formData.append('image', file);
             
@@ -509,8 +545,8 @@ HTML_TEMPLATE = """
             .finally(() => setLoading(false));
         }
 
-        // 分析影片
         function analyzeVideo() {
+            stopPlayback();
             const url = document.getElementById('url-input').value.trim();
             if (!url) return alert("Please enter a URL or path");
             
@@ -523,20 +559,59 @@ HTML_TEMPLATE = """
             .then(res => res.json())
             .then(data => {
                 if (data.error) throw new Error(data.error);
-                // 為了展示，這裡拿第一幀的結果顯示在主面板
+                
                 if (data.results && data.results.length > 0) {
-                    const firstFrame = data.results[0];
-                    const img = document.getElementById('preview-img');
-                    img.src = "data:image/jpeg;base64," + firstFrame.image_b64;
-                    img.classList.remove('hidden');
-                    document.getElementById('upload-text').classList.add('hidden');
-                    document.getElementById('input-filename').innerText = "Video Frame 1";
+                    videoFramesData = data.results;
+                    currentFrameIdx = 0;
                     
-                    renderResults(firstFrame.decision);
+                    document.getElementById('playback-controls').classList.remove('hidden');
+                    showFrame(0);
+                    startPlayback();
                 }
             })
             .catch(err => alert("Error: " + err.message))
             .finally(() => setLoading(false));
+        }
+
+        function showFrame(idx) {
+            if (idx >= videoFramesData.length) idx = 0;
+            const frame = videoFramesData[idx];
+            
+            const img = document.getElementById('preview-img');
+            img.src = "data:image/jpeg;base64," + frame.image_b64;
+            img.classList.remove('hidden');
+            document.getElementById('upload-text').classList.add('hidden');
+            
+            document.getElementById('input-filename').innerText = 
+                `Video Frame ${frame.frame_index} @ ${frame.timestamp.toFixed(1)}s`;
+            
+            document.getElementById('playback-status').innerText = 
+                `Frame ${frame.frame_index}/${videoFramesData.length}`;
+            const pct = ((idx + 1) / videoFramesData.length) * 100;
+            document.getElementById('timeline-fill').style.width = pct + "%";
+            
+            renderResults(frame.decision);
+        }
+
+        function startPlayback() {
+            if (playbackInterval) clearInterval(playbackInterval);
+            playbackInterval = setInterval(() => {
+                currentFrameIdx++;
+                if (currentFrameIdx >= videoFramesData.length) {
+                    currentFrameIdx = 0;
+                }
+                showFrame(currentFrameIdx);
+            }, 1500);
+        }
+
+        function stopPlayback() {
+            if (playbackInterval) {
+                clearInterval(playbackInterval);
+                playbackInterval = null;
+            }
+            document.getElementById('playback-controls').classList.add('hidden');
+            videoFramesData = [];
+            currentFrameIdx = 0;
         }
 
         function pasteClipboard() {
@@ -552,19 +627,17 @@ HTML_TEMPLATE = """
             }
         }
 
-        // 渲染決策結果
         function renderResults(decision) {
             const container = document.getElementById('decision-content');
             const rawJson = document.getElementById('raw-json');
             const execTime = document.getElementById('exec-time');
             
             rawJson.innerText = JSON.stringify(decision, null, 2);
-            execTime.innerText = Math.floor(Math.random() * 1000 + 1500) + " ms"; // 假裝耗時
+            execTime.innerText = Math.floor(Math.random() * 1000 + 1500) + " ms"; 
             
             const answers = decision.answers || decision;
             let html = '';
 
-            // 1. Information Density (Score)
             if (answers.information_density) {
                 const idn = answers.information_density;
                 html += `
@@ -593,7 +666,6 @@ HTML_TEMPLATE = """
                 html += `</div>`;
             }
 
-            // 2. NOUL 類型 (OCB, People, Nature, Game)
             const nouls = ['needs_ocr_or_parsing', 'contains_people', 'contains_nature', 'contains_game'];
             nouls.forEach(q => {
                 if (answers[q]) {
@@ -615,7 +687,6 @@ HTML_TEMPLATE = """
                 }
             });
 
-            // 3. Choice 類型 (Scene Category, Recommended Action)
             const choices = ['scene_category', 'recommended_action'];
             choices.forEach(q => {
                 if (answers[q]) {
@@ -632,11 +703,9 @@ HTML_TEMPLATE = """
                         </div>
                     `;
                     if (ans.probabilities) {
-                        // 排序概率，從高到低
                         const sorted = Object.entries(ans.probabilities).sort((a, b) => b[1] - a[1]);
                         for (const [key, val] of sorted) {
                             const pct = (val * 100).toFixed(1);
-                            // 給選中的加亮色，其餘暗色
                             const isSelected = key === ans.choice;
                             const barColor = isSelected ? 'var(--accent)' : '#3f3f46';
                             html += `
