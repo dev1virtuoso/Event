@@ -15,6 +15,9 @@ OLLAMA_BASE_URL = "http://127.0.0.1:11434"
 MODEL_NAME = "clef-flash"
 FRAME_INTERVAL_SECONDS = 2.5
 
+# ============================================================
+# 核心：修改題目與指令，加入「自訂目標物件」
+# ============================================================
 DEFAULT_QUESTIONS = {
     "scene_category": {
         "type": "choice",
@@ -57,12 +60,17 @@ DEFAULT_QUESTIONS = {
         "type": "noul",
         "instructions": "Does this image show a video game, game UI, gameplay screenshot, or game-related content?",
     },
+    # 新增：自訂目標偵測
+    "target_object_present": {
+        "type": "noul",
+        "instructions": "Does this image contain the specific target object requested by the user?",
+    },
     "recommended_action": {
         "type": "choice",
         "instructions": "Select the best automated pipeline action for this image.",
         "criteria": {
             "parse_chart_metrics": "Extract data series, labels, and metrics from chart/plot",
-            "extract_text_ocr": "Run OCR to extract text, code, or document body",
+            "extract_text_ocr": "Run text extraction to read text, code, or document body",
             "analyze_ui_state": "Inspect interface layout or debug terminal/UI state",
             "archive_media": "Tag and index in visual asset library",
         },
@@ -73,10 +81,24 @@ def encode_image_base64(image_path):
     with open(image_path, "rb") as f:
         return base64.b64encode(f.read()).decode("utf-8")
 
-def call_clef_flash_decision(image_path, state_text):
-    image_b64 = encode_image_base64(image_path)
+def encode_image_base64_from_bytes(image_bytes):
+    return base64.b64encode(image_bytes).decode("utf-8")
+
+def call_clef_flash_decision(image_b64, state_text, target_object=""):
     url = f"{OLLAMA_BASE_URL}/v1/systemone"
-    payload = {"model": MODEL_NAME, "state": state_text, "images": [image_b64], "questions": DEFAULT_QUESTIONS}
+    
+    # 如果有輸入目標物件，把它加入到 Prompt 中
+    prompt_state = state_text
+    if target_object:
+        prompt_state += f" The user is specifically looking for: '{target_object}'. Please evaluate the 'target_object_present' question based on this."
+    
+    payload = {
+        "model": MODEL_NAME, 
+        "state": prompt_state, 
+        "images": [image_b64], 
+        "questions": DEFAULT_QUESTIONS
+    }
+    
     try:
         r = requests.post(url, json=payload, timeout=300)
         r.raise_for_status()
@@ -102,26 +124,28 @@ def index():
 def api_analyze_image():
     if "image" not in request.files:
         return jsonify({"error": "No image uploaded"}), 400
+    
     file = request.files["image"]
-    temp_dir = Path(tempfile.mkdtemp(prefix="web_clef_"))
-    img_path = temp_dir / file.filename
-    file.save(img_path)
+    target_object = request.form.get("target_object", "").strip()
+    
+    # 直接從上傳的檔案讀取 bytes，不需存到硬碟
+    img_bytes = file.read()
+    img_b64 = encode_image_base64_from_bytes(img_bytes)
     
     try:
-        decision = call_clef_flash_decision(str(img_path), f"Image file: {file.filename}.")
-        img_b64 = encode_image_base64(str(img_path))
-        return jsonify({"status": "success", "decision": decision, "image_b64": img_b64})
+        decision = call_clef_flash_decision(img_b64, f"Image file: {file.filename}.", target_object)
+        return jsonify({"status": "success", "decision": decision})
     except Exception as e:
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-    finally:
-        shutil.rmtree(temp_dir, ignore_errors=True)
 
 @app.route("/api/analyze_video", methods=["POST"])
 def api_analyze_video():
     data = request.json
     url_or_path = data.get("url", "")
+    target_object = data.get("target_object", "").strip()
+    
     if not url_or_path:
         return jsonify({"error": "Empty URL/Path"}), 400
 
@@ -132,7 +156,6 @@ def api_analyze_video():
         video_path = url_or_path
         if url_or_path.startswith("http"):
             out_tpl = str(temp_dir / "video.%(ext)s")
-            # 修正 yt-dlp 指令，加上 timeout 避免卡死
             try:
                 res = subprocess.run(
                     [
@@ -160,12 +183,11 @@ def api_analyze_video():
         if not frame_files:
             raise RuntimeError("沒有抽取到任何幀")
 
-        # 限制只處理前 5 幀，避免 Web 請求超時
         results = []
-        for idx, frame_file in enumerate(frame_files[:5]):
+        for idx, frame_file in enumerate(frame_files[:10]): # 限制 10 幀避免超時
             ts = idx * FRAME_INTERVAL_SECONDS
-            decision = call_clef_flash_decision(str(frame_file), f"Video frame at {ts}s.")
             img_b64 = encode_image_base64(str(frame_file))
+            decision = call_clef_flash_decision(img_b64, f"Video frame at {ts}s.", target_object)
             results.append({
                 "frame_index": idx + 1,
                 "timestamp": ts,
@@ -176,13 +198,13 @@ def api_analyze_video():
         return jsonify({"status": "success", "results": results})
     except Exception as e:
         import traceback
-        traceback.print_exc()  # 強制在終端機印出詳細錯誤
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 # ============================================================
-# HTML/CSS/JS 前端模板 (保持不變，略過以節省空間)
+# HTML/CSS/JS 前端模板
 # ============================================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -297,6 +319,12 @@ HTML_TEMPLATE = """
             max-height: 100%;
             object-fit: contain;
         }
+        .upload-area video {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            display: none;
+        }
         .upload-text {
             color: var(--text-muted);
             font-size: 14px;
@@ -304,6 +332,7 @@ HTML_TEMPLATE = """
         .input-group {
             display: flex;
             gap: 10px;
+            margin-bottom: 10px;
         }
         .input-group input {
             flex: 1;
@@ -327,10 +356,13 @@ HTML_TEMPLATE = """
             cursor: pointer;
             font-weight: 600;
             transition: background 0.2s;
+            white-space: nowrap;
         }
         button:hover { background-color: #3f3f46; }
         button.primary { background-color: var(--accent); color: #000; }
         button.primary:hover { background-color: #22c55e; }
+        button.camera { background-color: #3b82f6; color: #fff; }
+        button.camera:hover { background-color: #2563eb; }
         
         .decision-block { margin-bottom: 25px; }
         .decision-header {
@@ -348,6 +380,7 @@ HTML_TEMPLATE = """
             border-radius: 4px;
             font-weight: bold;
         }
+        .tag.target { background-color: #ea580c; color: white; }
         .decision-title {
             font-size: 14px;
             font-weight: 600;
@@ -446,16 +479,30 @@ HTML_TEMPLATE = """
         <div class="left-col">
             <div class="panel">
                 <div class="panel-header">
-                    <span>IMAGE INPUT</span>
+                    <span>IMAGE / CAMERA INPUT</span>
                     <span id="input-filename">No file selected</span>
                 </div>
-                <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click()">
-                    <span class="upload-text" id="upload-text">Click to choose an image</span>
+                
+                <!-- 預覽區：支援圖片與鏡頭 -->
+                <div class="upload-area" id="upload-area">
+                    <span class="upload-text" id="upload-text">Click to choose an image<br>or use Camera</span>
                     <img id="preview-img" class="hidden" src="" alt="Preview">
+                    <video id="camera-video" autoplay playsinline></video>
                 </div>
+                
                 <input type="file" id="file-input" class="hidden" accept="image/*" onchange="handleImageUpload(event)">
                 
-                <div class="input-group" style="margin-top: 15px;">
+                <!-- 鏡頭控制 -->
+                <div class="input-group" style="margin-top: 10px;">
+                    <button onclick="startCamera()" id="btn-camera" class="camera">Start Camera</button>
+                    <button onclick="captureCameraFrame()" id="btn-capture" class="primary" style="display: none;">Capture & Analyze</button>
+                </div>
+
+                <!-- 影片輸入與目標設定 -->
+                <div class="input-group" style="margin-top: 10px;">
+                    <input type="text" id="target-object-input" placeholder="Target object (e.g. cat, person, chart)...">
+                </div>
+                <div class="input-group">
                     <input type="text" id="url-input" placeholder="Enter YouTube URL or local video path...">
                     <button onclick="pasteClipboard()">Paste</button>
                     <button class="primary" onclick="analyzeVideo()">Analyze Video</button>
@@ -512,9 +559,20 @@ HTML_TEMPLATE = """
         let videoFramesData = [];
         let playbackInterval = null;
         let currentFrameIdx = 0;
+        let mediaStream = null; // 儲存鏡頭串流
+        const videoElement = document.getElementById('camera-video');
+        const canvas = document.createElement('canvas'); // 用於擷取畫面
+
+        // 點擊上傳區塊開啟檔案選擇
+        document.getElementById('upload-area').addEventListener('click', (e) => {
+            if (videoElement.style.display !== 'block') {
+                document.getElementById('file-input').click();
+            }
+        });
 
         function handleImageUpload(event) {
             stopPlayback();
+            stopCamera();
             const file = event.target.files[0];
             if (!file) return;
             
@@ -528,8 +586,11 @@ HTML_TEMPLATE = """
             };
             reader.readAsDataURL(file);
             
+            // 發送到後端
+            const targetObj = document.getElementById('target-object-input').value.trim();
             const formData = new FormData();
             formData.append('image', file);
+            formData.append('target_object', targetObj);
             
             setLoading(true);
             fetch('/api/analyze_image', {
@@ -545,16 +606,88 @@ HTML_TEMPLATE = """
             .finally(() => setLoading(false));
         }
 
+        // --- 鏡頭功能 ---
+        async function startCamera() {
+            stopPlayback();
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                videoElement.srcObject = mediaStream;
+                videoElement.style.display = 'block';
+                document.getElementById('preview-img').classList.add('hidden');
+                document.getElementById('upload-text').classList.add('hidden');
+                
+                document.getElementById('btn-camera').style.display = 'none';
+                document.getElementById('btn-capture').style.display = 'block';
+                document.getElementById('input-filename').innerText = "Camera Active";
+            } catch (err) {
+                alert("無法開啟鏡頭: " + err.message);
+            }
+        }
+
+        function stopCamera() {
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+            }
+            videoElement.style.display = 'none';
+            document.getElementById('btn-camera').style.display = 'block';
+            document.getElementById('btn-capture').style.display = 'none';
+        }
+
+        function captureCameraFrame() {
+            if (!mediaStream) return;
+            
+            // 將當前影格畫到 canvas
+            canvas.width = videoElement.videoWidth;
+            canvas.height = videoElement.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+            
+            // 轉成 blob
+            canvas.toBlob((blob) => {
+                // 顯示截圖在預覽區
+                const img = document.getElementById('preview-img');
+                const url = URL.createObjectURL(blob);
+                img.src = url;
+                img.classList.remove('hidden');
+                videoElement.style.display = 'none';
+                
+                // 送到後端分析
+                const targetObj = document.getElementById('target-object-input').value.trim();
+                const formData = new FormData();
+                formData.append('image', blob, 'camera_capture.jpg');
+                formData.append('target_object', targetObj);
+                
+                setLoading(true);
+                fetch('/api/analyze_image', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) throw new Error(data.error);
+                    renderResults(data.decision);
+                    document.getElementById('input-filename').innerText = "Camera Snapshot Analyzed";
+                })
+                .catch(err => alert("Error: " + err.message))
+                .finally(() => setLoading(false));
+                
+            }, 'image/jpeg');
+        }
+
+        // --- 影片功能 ---
         function analyzeVideo() {
             stopPlayback();
+            stopCamera();
             const url = document.getElementById('url-input').value.trim();
+            const targetObj = document.getElementById('target-object-input').value.trim();
             if (!url) return alert("Please enter a URL or path");
             
             setLoading(true);
             fetch('/api/analyze_video', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: url })
+                body: JSON.stringify({ url: url, target_object: targetObj })
             })
             .then(res => res.json())
             .then(data => {
@@ -581,6 +714,7 @@ HTML_TEMPLATE = """
             img.src = "data:image/jpeg;base64," + frame.image_b64;
             img.classList.remove('hidden');
             document.getElementById('upload-text').classList.add('hidden');
+            videoElement.style.display = 'none';
             
             document.getElementById('input-filename').innerText = 
                 `Video Frame ${frame.frame_index} @ ${frame.timestamp.toFixed(1)}s`;
@@ -627,6 +761,7 @@ HTML_TEMPLATE = """
             }
         }
 
+        // 渲染結果 (加入自訂目標顯示)
         function renderResults(decision) {
             const container = document.getElementById('decision-content');
             const rawJson = document.getElementById('raw-json');
@@ -636,7 +771,27 @@ HTML_TEMPLATE = """
             execTime.innerText = Math.floor(Math.random() * 1000 + 1500) + " ms"; 
             
             const answers = decision.answers || decision;
+            const targetInput = document.getElementById('target-object-input').value.trim();
             let html = '';
+
+            // 優先顯示目標物件（如果有）
+            if (targetInput && answers.target_object_present) {
+                const ans = answers.target_object_present;
+                const prob = ans.noul !== undefined ? ans.noul : 0;
+                const isYes = prob >= 0.5;
+                const cls = isYes ? 'noul-yes' : 'noul-no';
+                const label = isYes ? 'FOUND' : 'NOT FOUND';
+                html += `
+                <div class="decision-block" style="border-left: 3px solid #ea580c; padding-left: 15px; margin-bottom: 25px;">
+                    <div class="decision-header">
+                        <span class="tag target">TARGET DETECTED</span>
+                        <span class="decision-title" style="color: #ea580c;">"${targetInput}"</span>
+                    </div>
+                    <div class="noul-row">
+                        <span class="${cls}" style="font-size: 18px; font-weight: bold;">${label}</span> &nbsp; P = ${prob.toFixed(4)}
+                    </div>
+                </div>`;
+            }
 
             if (answers.information_density) {
                 const idn = answers.information_density;
