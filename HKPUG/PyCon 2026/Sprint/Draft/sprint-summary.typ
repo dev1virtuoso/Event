@@ -1,5 +1,6 @@
 // PyCon HK 2026 Sprint — Final Summary Deck
 // Compile: typst compile sprint-summary.typ
+// Place the screenshot next to this file as: annotation-studio-demo.png
 // Audience: people outside the group who want a clear overview
 
 #let paper  = rgb("#F6F3F9")
@@ -205,7 +206,21 @@
 ]
 
 // ============================================================
-// SLIDE 8 — Question Design
+// SLIDE 8 — Live Demo Snapshot (with the screenshot)
+// ============================================================
+
+#slide("Live Demo Snapshot")[
+  #text(size: 9.3pt, fill: mute)[
+    Real run of the Annotation Studio on a short video clip (15 frames analysed).
+  ]
+  #v(0.08em)
+  #align(center)[
+    #image("annotation-studio-demo.png", width: 60%)
+  ]
+]
+
+// ============================================================
+// SLIDE 9 — Question Design
 // ============================================================
 
 #slide("Question Design (questions.yaml)")[
@@ -218,7 +233,7 @@
 ]
 
 // ============================================================
-// SLIDE 9 — Pipeline Overview
+// SLIDE 10 — Pipeline Overview
 // ============================================================
 
 #slide("How the Pipeline Works")[
@@ -236,7 +251,7 @@
 ]
 
 // ============================================================
-// SLIDE 10 — Concrete Takeaways
+// SLIDE 11 — Concrete Takeaways
 // ============================================================
 
 #slide("Three Concrete Takeaways")[
@@ -248,7 +263,7 @@
 ]
 
 // ============================================================
-// SLIDE 11 — Why It Matters for Python Users
+// SLIDE 12 — Why It Matters for Python Users
 // ============================================================
 
 #slide("Why This Matters for Python Users")[
@@ -261,20 +276,20 @@
 ]
 
 // ============================================================
-// SLIDE 12 — What Worked Well / What Is Harder
+// SLIDE 13 — What Worked Well / What Is Harder
 // ============================================================
 
 #slide("What Worked Well / What Is Harder")[
   #bullet-list((
     [Works well: clear frames, people, UI screens, game HUDs, text-heavy slides.],
-    [Harder: environment set up.],
+    [Harder: very blurry / dark frames, extreme motion blur, tiny distant objects.],
     [Conditional questions help a lot — we only ask “people prominence” when people are actually present.],
     [Local metrics (brightness, edge density, motion) enrich the state text and improve consistency.],
   ))
 ]
 
 // ============================================================
-// SLIDE 13 — Hands-on Experience
+// SLIDE 14 — Hands-on Experience
 // ============================================================
 
 #slide("Hands-on Experience (What Participants Did)")[
@@ -286,7 +301,7 @@
 ]
 
 // ============================================================
-// SLIDE 14 — Project Layout
+// SLIDE 15 — Project Layout
 // ============================================================
 
 #slide("Project Layout (simple view)")[
@@ -302,7 +317,7 @@
 ]
 
 // ============================================================
-// SLIDE 15 — Progress Snapshot
+// SLIDE 16 — Progress Snapshot
 // ============================================================
 
 #slide("Progress Snapshot")[
@@ -316,7 +331,7 @@
 ]
 
 // ============================================================
-// SLIDE 16 — Possible Next Steps
+// SLIDE 17 — Possible Next Steps
 // ============================================================
 
 #slide("Possible Next Steps")[
@@ -329,7 +344,7 @@
 ]
 
 // ============================================================
-// SLIDE 17 — Key Message
+// SLIDE 18 — Key Message
 // ============================================================
 
 #slide("Key Message")[
@@ -342,7 +357,7 @@
 ]
 
 // ============================================================
-// SLIDE 18 — Wrap-up
+// SLIDE 19 — Wrap-up
 // ============================================================
 
 #slide("Wrap-up & Questions")[
