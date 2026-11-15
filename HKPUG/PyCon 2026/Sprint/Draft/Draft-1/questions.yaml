@@ -1,0 +1,267 @@
+# ============================================================================
+# Clef Vision Annotation — decision question set
+# ============================================================================
+# This file is the EXTERNAL INPUT for the decision model. Edit it to change what
+# the model is asked; no Python changes required. Reload with the "Reload
+# questions" button in the UI, or restart the script.
+#
+# ---------------------------------------------------------------------------
+# QUESTION FORMAT
+# ---------------------------------------------------------------------------
+# Every question is a mapping under `questions:` with a stable `key` used in
+# the JSON response:
+#
+#   my_question:
+#     type: noul | choice | score
+#     label: Short human label (UI display + state text)
+#     instructions: What the model should judge.
+#     tag: Optional grouping bucket for the UI (e.g. people, vehicles).
+#     tags: Optional list of tags to attach when a `when` rule fires.
+#     when: Optional rule enabling this question ONLY when another answer lands.
+#     criteria: Required for `choice`; optional list for `score`.
+#     legend: Optional display names for `score` levels.
+#
+#   type: noul    -> binary probability. Answer is P(true) in 0..1.
+#   type: choice  -> pick one key from `criteria`; returns probabilities.
+#   type: score   -> continuous 0..1 (or 1..N if `scale` set); `criteria` names
+#                    the levels used for the legend.
+#
+# ---------------------------------------------------------------------------
+# `when` RULES  (conditional questions — keeps token cost down)
+# ---------------------------------------------------------------------------
+#   when:
+#     question: is_screen_content      # key of another question
+#     at_least: 0.5                    # noul / score comparison (default 0.5)
+#
+#   when:
+#     question: scene_type             # key of another question
+#     is: screen_capture               # choice equality
+#
+#   when:
+#     question: contains_people
+#     at_least: 0.5
+#     unless_choice: {scene_type: [animation]}   # skip in animated frames
+#
+# A question whose rule does not fire is reported as "skipped" and costs
+# nothing. Dependencies are evaluated in the order questions appear here, so
+# list a question after the one its rule references.
+# ---------------------------------------------------------------------------
+
+version: 3
+name: "Video frame annotation"
+description: >
+  Per-frame tagging for video understanding: what is on screen, who and what is
+  visible, and whether the frame is a screen recording or a live camera view.
+
+# ---------------------------------------------------------------------------
+# GLOBAL CONTEXT
+# ---------------------------------------------------------------------------
+# Prepended to the state text for every frame. Media facts (duration, fps,
+# resolution) are appended automatically by the script.
+context: >
+  You are annotating a single sampled frame from a video clip. Judge only what
+  is visible in this frame. Do not infer what happens in other frames.
+
+# ---------------------------------------------------------------------------
+# QUESTIONS
+# ---------------------------------------------------------------------------
+questions:
+
+  # --- What kind of footage is this? ---------------------------------------
+  scene_type:
+    type: choice
+    label: Scene type
+    tag: scene
+    instructions: >
+      Classify what kind of footage this frame comes from, based on the overall
+      rendering style. Real camera footage of the physical world looks like a
+      photograph. Screen captures show crisp UI chrome, text, and rectangular
+      windows. Game footage shows a rendered 3D/2D game world, HUD elements, or
+      player controls. Animation shows flat colors, drawn lines, or cel shading.
+    criteria:
+      live_action: Real camera footage of the physical world (people, streets, rooms, nature)
+      screen_capture: A computer screen, app UI, webpage, terminal, or recorded desktop
+      game_footage: Video game rendering, gameplay capture, or in-game HUD
+      animation: Cartoon, anime, motion graphics, or cel-shaded artwork
+
+  is_screen_content:
+    type: noul
+    label: Screen recording
+    tag: scene
+    instructions: >
+      Is this a recording of a digital screen rather than a real camera view?
+      Look for window chrome, menus, text rendered by an OS or browser, cursor,
+      taskbar, or perfectly uniform UI backgrounds.
+
+  # --- People --------------------------------------------------------------
+  contains_people:
+    type: noul
+    label: People present
+    tag: people
+    instructions: >
+      Are any human beings visible in this frame? Include any part of a person:
+      faces, heads, full bodies, hands, torsos, or silhouettes. A person in a
+      photograph on a screen still counts if a human figure is visible.
+
+  people_visibility:
+    type: choice
+    label: People prominence
+    tag: people
+    instructions: >
+      How prominent are the people in this frame?
+    when:
+      question: contains_people
+      at_least: 0.5
+    criteria:
+      close_up: A face or upper body fills much of the frame
+      mid_shot: People are clearly visible at a conversational distance
+      wide_shot: People are small figures within a larger scene
+      incidental: A barely visible person, distant figure, or screen inset
+
+  is_selfie_or_presenter:
+    type: noul
+    label: Presenter / streamer
+    tag: people
+    instructions: >
+      Is a person facing the camera as a presenter, streamer, vlogger, or
+      speaker? Typical of talking-head streams and webcam overlays.
+
+  # --- Vehicles ------------------------------------------------------------
+  contains_vehicles:
+    type: noul
+    label: Vehicles present
+    tag: vehicles
+    instructions: >
+      Are any road vehicles visible, including cars, trucks, buses, vans,
+      taxis, motorcycles, or scooters? Parked or moving both count. Exclude
+      bicycles, trains, boats, and aircraft.
+
+  vehicle_context:
+    type: choice
+    label: Vehicle setting
+    tag: vehicles
+    instructions: >
+      Where do the vehicles appear?
+    when:
+      question: contains_vehicles
+      at_least: 0.5
+    criteria:
+      street_traffic: Road traffic, highway, or city street
+      parked: Parked or stationary vehicles
+      close_up: A vehicle filling much of the frame
+      incidental: Distant or minor vehicles in the background
+
+  # --- Camera / motion -----------------------------------------------------
+  camera_motion:
+    type: choice
+    label: Camera motion
+    tag: motion
+    instructions: >
+      Infer how the camera is moving from the framing, blur, and horizon tilt.
+      A locked-off screen recording or tripod shot is static. Smooth horizontal
+      or diagonal rotation is a pan. Tilted horizons and motion blur with an
+      unstable composition indicate handheld movement.
+    criteria:
+      static: Locked-off tripod shot or screen recording
+      pan: Smooth horizontal, vertical, or diagonal rotation
+      handheld: Shaky, walking, or unstable framing
+      other: Motion that does not fit the above, or unclear
+
+  # --- Screen content details ----------------------------------------------
+  screen_content_type:
+    type: choice
+    label: Screen content
+    tag: screen
+    instructions: >
+      What is shown on the screen?
+    when:
+      question: is_screen_content
+      at_least: 0.5
+    criteria:
+      web_or_app: Website, web app, or native application window
+      presentation: Slide deck, keynote, or educational visual
+      terminal_or_code: Command line, IDE, or source code editor
+      dashboard_or_chart: Data dashboard, analytics, chart, or plot
+      video_playback: A video player, media call, or livestream UI
+
+  has_ui_chrome:
+    type: noul
+    label: UI chrome visible
+    tag: screen
+    instructions: >
+      Are recognizable interface chrome elements visible, such as a taskbar,
+      menu bar, browser tabs, window controls, scrollbars, or a cursor?
+
+  is_livestream_frame:
+    type: noul
+    label: Livestream layout
+    tag: screen
+    instructions: >
+      Does this frame look like a livestream or video-call layout? Look for a
+      webcam inset, chat panel, viewer count, "LIVE" badge, streamer overlay,
+      or a split-screen presenter-and-content composition.
+
+  # --- Game ---------------------------------------------------------------
+  contains_game:
+    type: noul
+    label: Game content
+    tag: scene
+    instructions: >
+      Is this a video game, gameplay capture, or game UI? Look for HUD elements
+      such as health bars, minimaps, ammo counts, score counters, or virtual
+      controls over a rendered 3D world.
+
+  # --- Text / information ------------------------------------------------
+  has_text:
+    type: noul
+    label: Text present
+    tag: text
+    instructions: >
+      Is legible text visible anywhere in this frame, including captions,
+      subtitles, labels, code, or slide bullet points?
+
+  information_density:
+    type: score
+    label: Information density
+    tag: text
+    instructions: Rate how much visual and textual information this frame carries.
+    criteria:
+      - Sparse (single subject, little or no text)
+      - Moderate (a few elements, some readable text)
+      - Dense (many elements, heavy text, or detailed UI)
+
+  # --- Environment --------------------------------------------------------
+  contains_nature:
+    type: noul
+    label: Natural scenery
+    tag: environment
+    instructions: >
+      Does this frame show natural scenery or elements such as trees,
+      mountains, sky, water, plants, animals, or landscapes? Exclude purely
+      indoor or urban settings with no natural elements.
+
+  environment_setting:
+    type: choice
+    label: Setting
+    tag: environment
+    instructions: Where does this frame take place?
+    criteria:
+      indoor: Room, office, studio, or interior space
+      outdoor_urban: Street, city, or built environment outdoors
+      outdoor_nature: Countryside, park, forest, or other natural landscape
+      virtual_or_screen: A digital space, game world, or screen recording
+      unclear: Cannot be determined from this frame
+
+  # --- Suggested downstream action ---------------------------------------
+  recommended_action:
+    type: choice
+    label: Suggested action
+    tag: pipeline
+    instructions: Choose the most useful next automated processing step for this frame.
+    criteria:
+      detect_people: Run a dedicated person/face detector or blur faces for privacy
+      detect_vehicles: Run vehicle detection or traffic counting
+      extract_text_ocr: Run OCR to capture on-screen text or subtitles
+      describe_screen_state: Capture UI state, errors, or terminal output
+      summarize_gameplay: Describe gameplay events, HUD state, or action
+      archive_media: Tag and index into the visual asset library
