@@ -2,8 +2,10 @@
 """
 圖片拖放決策分析器 (Drag-and-Drop Vision Decision Tool)
 支援模型：clef-flash (Jev / System One API 規格)
+已修復 macOS 繁體中文字型顯示問題
 """
 
+import os
 import pygame
 import ollama
 import base64
@@ -60,6 +62,32 @@ DEFAULT_QUESTIONS = {
 }
 
 
+def load_cjk_font(size: int) -> pygame.font.Font:
+    """自動尋找並載入 macOS 系統內建的繁體中文字型檔"""
+    mac_font_paths = [
+        "/System/Library/Fonts/STHeiti Medium.ttc",
+        "/System/Library/Fonts/STHeiti Light.ttc",
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        "/System/Library/Fonts/Hiragino Sans GB.ttc",
+        "/System/Library/Fonts/ヒラギノ角ゴシック W4.ttc",
+        "/Library/Fonts/Arial Unicode.ttf",
+    ]
+    for path in mac_font_paths:
+        if os.path.exists(path):
+            try:
+                return pygame.font.Font(path, size)
+            except Exception:
+                continue
+
+    # 若找不到檔案路徑，嘗試使用 Pygame 字型匹配
+    for name in ["stheiti", "pingfangtc", "heititc", "hiraginosansgb", "arialunicode"]:
+        matched = pygame.font.match_font(name)
+        if matched:
+            return pygame.font.Font(matched, size)
+
+    return pygame.font.SysFont("arial", size)
+
+
 class VisionDecisionApp:
     def __init__(self):
         pygame.init()
@@ -67,9 +95,9 @@ class VisionDecisionApp:
         pygame.display.set_caption("Clef-Flash 視覺決策分析器 (Drag & Drop Image)")
         self.clock = pygame.time.Clock()
 
-        self.font_title = pygame.font.SysFont("pingfangtc,arial", 22, bold=True)
-        self.font_body = pygame.font.SysFont("pingfangtc,menlo,consolas,arial", 15)
-        self.font_small = pygame.font.SysFont("menlo,consolas,monospace", 13)
+        self.font_title = load_cjk_font(22)
+        self.font_body = load_cjk_font(15)
+        self.font_small = load_cjk_font(14)
 
         self.image_surface = None
         self.image_path = None
