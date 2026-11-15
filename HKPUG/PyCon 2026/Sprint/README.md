@@ -50,7 +50,7 @@ gantt
 
 ### 3. pull this repo to your computer
 
-1. `git pull https://github.com/dev1virtuoso/Event.git`
+1. `git clone https://github.com/dev1virtuoso/Event.git`
 
 2. Go to the `Event` folder, `cd path/to/Event/folder`
 
