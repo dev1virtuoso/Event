@@ -5,6 +5,12 @@ Powered by clef-flash (Decision-Native / Jev / System One API)
 All-English UI & 10-Category Classification
 """
 
+import os
+
+# === Put your remote Ollama host config here (MUST be before `import ollama`) ===
+REMOTE_OLLAMA_HOST = "http://127.0.0.1:11434"  # <-- 改成你的遠端 IP
+os.environ["OLLAMA_HOST"] = REMOTE_OLLAMA_HOST
+
 import pygame
 import ollama
 import cv2
