@@ -50,6 +50,8 @@ gantt
 
 ### 3. pull this repo to your computer
 
+#### macOS/Windows
+
 1. `git clone https://github.com/dev1virtuoso/Event.git`
 
 2. Go to the `Event` folder, `cd path/to/Event/folder`
@@ -62,8 +64,75 @@ python3 -m venv .venv313
 source .venv313/bin/activate
 `
 
-8. `pip install ollama pygame opencv-python pathlib numpy json --frozen`
+8. `pip install ollama pygame opencv-python pathlib numpy`
 
 9. Try the demo script to verify your env, `python -m snake_clef.py`
+
+#### Windows (by AI)
+
+### 1. Download and Install Ollama
+
+You can install Ollama via PowerShell using `winget`, or download the installer directly from [ollama.com](https://ollama.com/download/windows).
+
+```powershell
+winget install Ollama.Ollama
+
+```
+
+*(Note: After installing, you may need to restart your terminal so Windows recognizes the `ollama` command.)*
+
+### 2. Download `clef-flash` (~12 GB)
+
+Open PowerShell or Command Prompt and run:
+
+```powershell
+ollama pull clef-flash
+
+```
+
+### 3. Clone the Repo and Navigate to the Folder
+
+In Windows, paths with spaces (like `PyCon 2026`) need to be wrapped in quotes.
+
+```powershell
+git clone https://github.com/dev1virtuoso/Event.git
+cd Event
+cd ".\HKPUG\PyCon 2026\Sprint"
+
+```
+
+### 4. Create and Activate the Virtual Environment
+
+Windows uses `py` or `python` instead of `python3`, and the activation script is located in a `Scripts` folder rather than `bin`.
+
+```powershell
+# Create the virtual environment (use `py -3.13` if you have multiple Python versions installed)
+python -m venv .venv313
+
+# Activate it (PowerShell)
+.\.venv313\Scripts\Activate.ps1
+
+```
+
+*(If PowerShell gives you an execution policy error when activating, run `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` first, or use Command Prompt and run `.venv313\Scripts\activate.bat` instead.)*
+
+### 5. Install Dependencies
+
+`pathlib` and `json` are built into Python (trying to `pip install` them will throw an error), and `--frozen` isn't a standard `pip` flag, so use this instead:
+
+```powershell
+pip install ollama pygame opencv-python numpy
+
+```
+
+### 6. Run the Demo Script
+
+When using the `-m` flag in Python, omit the `.py` extension:
+
+```powershell
+python -m snake_clef
+```
+
+*(If that fails due to folder structure, run it directly as a file: `python snake_clef.py`)*
 
 If you have any question, advice, or topic want to discuss with us, please don't hesitate to reach out. Thanks a lot.
