@@ -241,4 +241,3 @@ class VisionDecisionApp:
 if __name__ == "__main__":
     app = VisionDecisionApp()
     app.run()
-EOF
