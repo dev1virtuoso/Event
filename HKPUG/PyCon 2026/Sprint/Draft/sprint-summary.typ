@@ -215,7 +215,19 @@
   ]
   #v(0.08em)
   #align(center)[
-    #image("annotation-studio-demo.png", width: 60%)
+    #image("annotation-studio-demo.png", width: 80%)
+    
+  ]
+]
+
+#slide("Live Demo Snapshot")[
+  #text(size: 9.3pt, fill: mute)[
+    Real run of the Annotation Studio on a short video clip (15 frames analysed).
+  ]
+  #v(0.08em)
+  #align(center)[
+    #image("image.png", width: 80%)
+    
   ]
 ]
 
