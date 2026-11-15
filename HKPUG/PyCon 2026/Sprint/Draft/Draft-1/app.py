@@ -75,12 +75,17 @@ DEFAULT_QUESTIONS = {
         "type": "noul",
         "instructions": "Does this image show a video game, game UI, gameplay screenshot, or game-related content?",
     },
+    # 新增：自訂目標偵測
+    "target_object_present": {
+        "type": "noul",
+        "instructions": "Does this image contain the specific target object requested by the user?",
+    },
     "recommended_action": {
         "type": "choice",
         "instructions": "Select the best automated pipeline action for this image.",
         "criteria": {
             "parse_chart_metrics": "Extract data series, labels, and metrics from chart/plot",
-            "extract_text_ocr": "Run OCR to extract text, code, or document body",
+            "extract_text_ocr": "Run text extraction to read text, code, or document body",
             "analyze_ui_state": "Inspect interface layout or debug terminal/UI state",
             "archive_media": "Tag and index in visual asset library",
         },
@@ -506,7 +511,7 @@ def api_health():
 
 
 # ============================================================
-# HTML/CSS/JS 前端模板 (保持不變，略過以節省空間)
+# HTML/CSS/JS 前端模板
 # ============================================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -630,6 +635,7 @@ HTML_TEMPLATE = """
         .input-group {
             display: flex;
             gap: 10px;
+            margin-bottom: 10px;
         }
         .input-group input {
             flex: 1;
@@ -653,10 +659,13 @@ HTML_TEMPLATE = """
             cursor: pointer;
             font-weight: 600;
             transition: background 0.2s;
+            white-space: nowrap;
         }
         button:hover { background-color: #3f3f46; }
         button.primary { background-color: var(--accent); color: #000; }
         button.primary:hover { background-color: #22c55e; }
+        button.camera { background-color: #3b82f6; color: #fff; }
+        button.camera:hover { background-color: #2563eb; }
         
         .decision-block { margin-bottom: 25px; }
         .decision-header {
@@ -674,6 +683,7 @@ HTML_TEMPLATE = """
             border-radius: 4px;
             font-weight: bold;
         }
+        .tag.target { background-color: #ea580c; color: white; }
         .decision-title {
             font-size: 14px;
             font-weight: 600;
@@ -785,7 +795,17 @@ HTML_TEMPLATE = """
                     Images: png · jpg · webp · bmp · gif &nbsp;|&nbsp; Video: mp4 · mov · m4v · webm · avi · mkv · mpeg (up to <span id="max-upload">512</span> MB)
                 </p>
                 
-                <div class="input-group" style="margin-top: 15px;">
+                <!-- 鏡頭控制 -->
+                <div class="input-group" style="margin-top: 10px;">
+                    <button onclick="startCamera()" id="btn-camera" class="camera">Start Camera</button>
+                    <button onclick="captureCameraFrame()" id="btn-capture" class="primary" style="display: none;">Capture & Analyze</button>
+                </div>
+
+                <!-- 影片輸入與目標設定 -->
+                <div class="input-group" style="margin-top: 10px;">
+                    <input type="text" id="target-object-input" placeholder="Target object (e.g. cat, person, chart)...">
+                </div>
+                <div class="input-group">
                     <input type="text" id="url-input" placeholder="Enter YouTube URL or local video path...">
                     <button onclick="pasteClipboard()">Paste</button>
                     <button class="primary" onclick="analyzeVideo()">Analyze Video</button>
@@ -904,6 +924,7 @@ HTML_TEMPLATE = """
 
         function handleFileUpload(event) {
             stopPlayback();
+            stopCamera();
             const file = event.target.files[0];
             if (!file) return;
 
@@ -948,7 +969,9 @@ HTML_TEMPLATE = """
 
         function analyzeVideo() {
             stopPlayback();
+            stopCamera();
             const url = document.getElementById('url-input').value.trim();
+            const targetObj = document.getElementById('target-object-input').value.trim();
             if (!url) return alert("Please enter a URL or path");
 
             resetPreview();
@@ -958,7 +981,7 @@ HTML_TEMPLATE = """
             fetch('/api/analyze_video', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: url })
+                body: JSON.stringify({ url: url, target_object: targetObj })
             })
             .then(res => res.json().then(body => ({ ok: res.ok, body })))
             .then(({ body }) => {
@@ -1034,6 +1057,7 @@ HTML_TEMPLATE = """
             img.src = "data:image/jpeg;base64," + frame.image_b64;
             img.classList.remove('hidden');
             document.getElementById('upload-text').classList.add('hidden');
+            videoElement.style.display = 'none';
             
             document.getElementById('input-filename').innerText = 
                 `${frame.name || sourceName || 'video'} · frame ${frame.frame_index} @ ${frame.timestamp.toFixed(1)}s`;
@@ -1103,7 +1127,27 @@ HTML_TEMPLATE = """
             execTime.innerText = reqMs ? Math.round(reqMs) + " ms" : (lastReqMs ? Math.round(lastReqMs) + " ms" : "-");
             
             const answers = decision.answers || decision;
+            const targetInput = document.getElementById('target-object-input').value.trim();
             let html = '';
+
+            // 優先顯示目標物件（如果有）
+            if (targetInput && answers.target_object_present) {
+                const ans = answers.target_object_present;
+                const prob = ans.noul !== undefined ? ans.noul : 0;
+                const isYes = prob >= 0.5;
+                const cls = isYes ? 'noul-yes' : 'noul-no';
+                const label = isYes ? 'FOUND' : 'NOT FOUND';
+                html += `
+                <div class="decision-block" style="border-left: 3px solid #ea580c; padding-left: 15px; margin-bottom: 25px;">
+                    <div class="decision-header">
+                        <span class="tag target">TARGET DETECTED</span>
+                        <span class="decision-title" style="color: #ea580c;">"${targetInput}"</span>
+                    </div>
+                    <div class="noul-row">
+                        <span class="${cls}" style="font-size: 18px; font-weight: bold;">${label}</span> &nbsp; P = ${prob.toFixed(4)}
+                    </div>
+                </div>`;
+            }
 
             if (answers.information_density) {
                 const idn = answers.information_density;
