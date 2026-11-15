@@ -16,7 +16,7 @@ MODEL_NAME = "clef-flash"
 FRAME_INTERVAL_SECONDS = 2.5
 
 # ============================================================
-# 核心：修改題目與指令，加入「自訂目標物件」
+# 核心：題目與指令
 # ============================================================
 DEFAULT_QUESTIONS = {
     "scene_category": {
@@ -60,7 +60,6 @@ DEFAULT_QUESTIONS = {
         "type": "noul",
         "instructions": "Does this image show a video game, game UI, gameplay screenshot, or game-related content?",
     },
-    # 新增：自訂目標偵測
     "target_object_present": {
         "type": "noul",
         "instructions": "Does this image contain the specific target object requested by the user?",
@@ -87,7 +86,6 @@ def encode_image_base64_from_bytes(image_bytes):
 def call_clef_flash_decision(image_b64, state_text, target_object=""):
     url = f"{OLLAMA_BASE_URL}/v1/systemone"
     
-    # 如果有輸入目標物件，把它加入到 Prompt 中
     prompt_state = state_text
     if target_object:
         prompt_state += f" The user is specifically looking for: '{target_object}'. Please evaluate the 'target_object_present' question based on this."
@@ -128,7 +126,6 @@ def api_analyze_image():
     file = request.files["image"]
     target_object = request.form.get("target_object", "").strip()
     
-    # 直接從上傳的檔案讀取 bytes，不需存到硬碟
     img_bytes = file.read()
     img_b64 = encode_image_base64_from_bytes(img_bytes)
     
@@ -184,7 +181,7 @@ def api_analyze_video():
             raise RuntimeError("沒有抽取到任何幀")
 
         results = []
-        for idx, frame_file in enumerate(frame_files[:10]): # 限制 10 幀避免超時
+        for idx, frame_file in enumerate(frame_files[:10]): 
             ts = idx * FRAME_INTERVAL_SECONDS
             img_b64 = encode_image_base64(str(frame_file))
             decision = call_clef_flash_decision(img_b64, f"Video frame at {ts}s.", target_object)
@@ -363,6 +360,8 @@ HTML_TEMPLATE = """
         button.primary:hover { background-color: #22c55e; }
         button.camera { background-color: #3b82f6; color: #fff; }
         button.camera:hover { background-color: #2563eb; }
+        button.stop { background-color: #ef4444; color: #fff; }
+        button.stop:hover { background-color: #dc2626; }
         
         .decision-block { margin-bottom: 25px; }
         .decision-header {
@@ -494,8 +493,8 @@ HTML_TEMPLATE = """
                 
                 <!-- 鏡頭控制 -->
                 <div class="input-group" style="margin-top: 10px;">
-                    <button onclick="startCamera()" id="btn-camera" class="camera">Start Camera</button>
-                    <button onclick="captureCameraFrame()" id="btn-capture" class="primary" style="display: none;">Capture & Analyze</button>
+                    <button onclick="startCamera()" id="btn-camera" class="camera">Start Auto Camera</button>
+                    <button onclick="stopCamera()" id="btn-stop-camera" class="stop" style="display: none;">Stop Camera</button>
                 </div>
 
                 <!-- 影片輸入與目標設定 -->
@@ -559,12 +558,17 @@ HTML_TEMPLATE = """
         let videoFramesData = [];
         let playbackInterval = null;
         let currentFrameIdx = 0;
-        let mediaStream = null; // 儲存鏡頭串流
+        
+        let mediaStream = null; 
+        let autoCaptureInterval = null;
+        let isAutoAnalyzing = false; // 避免請求堆疊
+        
         const videoElement = document.getElementById('camera-video');
-        const canvas = document.createElement('canvas'); // 用於擷取畫面
+        const canvas = document.createElement('canvas');
 
         // 點擊上傳區塊開啟檔案選擇
         document.getElementById('upload-area').addEventListener('click', (e) => {
+            // 只有在沒有開啟鏡頭時點擊才觸發檔案上傳
             if (videoElement.style.display !== 'block') {
                 document.getElementById('file-input').click();
             }
@@ -586,7 +590,6 @@ HTML_TEMPLATE = """
             };
             reader.readAsDataURL(file);
             
-            // 發送到後端
             const targetObj = document.getElementById('target-object-input').value.trim();
             const formData = new FormData();
             formData.append('image', file);
@@ -606,7 +609,7 @@ HTML_TEMPLATE = """
             .finally(() => setLoading(false));
         }
 
-        // --- 鏡頭功能 ---
+        // --- 自動鏡頭功能 ---
         async function startCamera() {
             stopPlayback();
             try {
@@ -617,25 +620,37 @@ HTML_TEMPLATE = """
                 document.getElementById('upload-text').classList.add('hidden');
                 
                 document.getElementById('btn-camera').style.display = 'none';
-                document.getElementById('btn-capture').style.display = 'block';
-                document.getElementById('input-filename').innerText = "Camera Active";
+                document.getElementById('btn-stop-camera').style.display = 'block';
+                document.getElementById('input-filename').innerText = "Auto Camera Active (2s interval)";
+                
+                // 開始每 2 秒自動截圖分析
+                autoCaptureInterval = setInterval(autoCaptureAndAnalyze, 2000);
+                
             } catch (err) {
                 alert("無法開啟鏡頭: " + err.message);
             }
         }
 
         function stopCamera() {
+            if (autoCaptureInterval) {
+                clearInterval(autoCaptureInterval);
+                autoCaptureInterval = null;
+            }
             if (mediaStream) {
                 mediaStream.getTracks().forEach(track => track.stop());
                 mediaStream = null;
             }
             videoElement.style.display = 'none';
             document.getElementById('btn-camera').style.display = 'block';
-            document.getElementById('btn-capture').style.display = 'none';
+            document.getElementById('btn-stop-camera').style.display = 'none';
+            document.getElementById('input-filename').innerText = "Camera Stopped";
         }
 
-        function captureCameraFrame() {
-            if (!mediaStream) return;
+        function autoCaptureAndAnalyze() {
+            if (!mediaStream || isAutoAnalyzing) return; // 若正在處理則跳過這次
+            
+            isAutoAnalyzing = true;
+            document.getElementById('input-filename').innerText = "Capturing & Analyzing...";
             
             // 將當前影格畫到 canvas
             canvas.width = videoElement.videoWidth;
@@ -643,22 +658,29 @@ HTML_TEMPLATE = """
             const ctx = canvas.getContext('2d');
             ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
             
-            // 轉成 blob
             canvas.toBlob((blob) => {
-                // 顯示截圖在預覽區
+                if (!blob) {
+                    isAutoAnalyzing = false;
+                    return;
+                }
+                
+                // 1. 立刻更新左側預覽為這次的截圖，並暫時隱藏攝影機畫面
                 const img = document.getElementById('preview-img');
                 const url = URL.createObjectURL(blob);
                 img.src = url;
                 img.classList.remove('hidden');
                 videoElement.style.display = 'none';
                 
-                // 送到後端分析
+                // 2. 顯示分析中提示
+                const content = document.getElementById('decision-content');
+                content.innerHTML = '<p style="color: var(--accent); text-align: center; margin-top: 50px;">Analyzing snapshot...</p>';
+                
+                // 3. 送到後端分析
                 const targetObj = document.getElementById('target-object-input').value.trim();
                 const formData = new FormData();
                 formData.append('image', blob, 'camera_capture.jpg');
                 formData.append('target_object', targetObj);
                 
-                setLoading(true);
                 fetch('/api/analyze_image', {
                     method: 'POST',
                     body: formData
@@ -666,13 +688,29 @@ HTML_TEMPLATE = """
                 .then(res => res.json())
                 .then(data => {
                     if (data.error) throw new Error(data.error);
-                    renderResults(data.decision);
-                    document.getElementById('input-filename').innerText = "Camera Snapshot Analyzed";
+                    
+                    // 4. 延遲 0.5 秒後才更新右側結果，避免閃太快
+                    setTimeout(() => {
+                        renderResults(data.decision);
+                    }, 500);
                 })
-                .catch(err => alert("Error: " + err.message))
-                .finally(() => setLoading(false));
+                .catch(err => {
+                    console.error("Auto analysis error:", err);
+                    content.innerHTML = `<p style="color: #ef4444; text-align: center; margin-top: 50px;">Error: ${err.message}</p>`;
+                })
+                .finally(() => {
+                    // 5. 分析完成後，等待一小段時間再恢復攝影機即時畫面
+                    setTimeout(() => {
+                        isAutoAnalyzing = false;
+                        if (mediaStream) {
+                            videoElement.style.display = 'block'; // 恢復攝影機
+                            img.classList.add('hidden'); // 隱藏截圖
+                            document.getElementById('input-filename').innerText = "Auto Camera Active (2s interval)";
+                        }
+                    }, 1000); // 讓截圖與結果停留 1 秒
+                });
                 
-            }, 'image/jpeg');
+            }, 'image/jpeg', 0.8);
         }
 
         // --- 影片功能 ---
@@ -761,7 +799,6 @@ HTML_TEMPLATE = """
             }
         }
 
-        // 渲染結果 (加入自訂目標顯示)
         function renderResults(decision) {
             const container = document.getElementById('decision-content');
             const rawJson = document.getElementById('raw-json');
@@ -774,7 +811,6 @@ HTML_TEMPLATE = """
             const targetInput = document.getElementById('target-object-input').value.trim();
             let html = '';
 
-            // 優先顯示目標物件（如果有）
             if (targetInput && answers.target_object_present) {
                 const ans = answers.target_object_present;
                 const prob = ans.noul !== undefined ? ans.noul : 0;
