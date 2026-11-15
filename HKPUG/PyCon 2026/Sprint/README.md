@@ -58,7 +58,7 @@ gantt
 
 4. create a py venv via uv, `uv init`
 
-5. `uv add ollama pygame cv2 pathlib numpy json --frozen`
+5. `uv add ollama pygame opencv-python pathlib numpy json --frozen`
 
 6. Try the demo script to verify your env, `uv run snake_clef.py`
 
