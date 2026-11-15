@@ -20,8 +20,8 @@ import os
 REMOTE_OLLAMA_HOST = "http://127.0.0.1:11434"
 os.environ["OLLAMA_HOST"] = REMOTE_OLLAMA_HOST
 
-import io
 import json
+import tempfile
 import threading
 import time
 import uuid
@@ -45,6 +45,9 @@ from flask import (
 
 APP_DIR = Path(__file__).resolve().parent
 STATIC_DIR = APP_DIR / "static"
+# Uploads live outside the static tree so they are never publicly servable.
+UPLOAD_DIR = Path(tempfile.gettempdir()) / "clef_flash_uploads"
+
 
 MODEL_NAME = "clef-flash"
 KEEP_ALIVE = "30m"
@@ -139,9 +142,30 @@ def resolve_example_dir(override=None) -> Path | None:
 
 
 def list_sample_groups(root: Path) -> list[dict]:
-    """Group the sample images by their sub-folder, sorted for stable display."""
+    """Group the sample images by their sub-folder, sorted for stable display.
+
+    Images sitting directly in the root are also included (as their own group),
+    so pointing --samples at a flat folder still yields a usable gallery.
+    """
     groups = []
+
+    def collect(entries, prefix):
+        images = []
+        for f in entries:
+            rel = f"{prefix}{f.name}" if prefix else f.name
+            images.append({
+                "name": f.name,
+                # Relative to the sample root; the client posts this back.
+                "path": rel,
+                "url": f"/samples/{rel}",
+            })
+        return images
+
     try:
+        root_files = sorted(
+            p for p in root.iterdir()
+            if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
+        )
         subdirs = sorted(p for p in root.iterdir() if p.is_dir())
     except OSError:
         return groups
@@ -158,18 +182,11 @@ def list_sample_groups(root: Path) -> list[dict]:
             continue
         if not files:
             continue
-        groups.append({
-            "folder": sub.name,
-            "images": [
-                {
-                    "name": f.name,
-                    # Relative to the sample root; the client posts this back.
-                    "path": f"{sub.name}/{f.name}",
-                    "url": f"/samples/{sub.name}/{f.name}",
-                }
-                for f in files
-            ],
-        })
+        groups.append({"folder": sub.name, "images": collect(files, f"{sub.name}/")})
+
+    if root_files:
+        groups.append({"folder": root.name, "images": collect(root_files, "")})
+
     return groups
 
 
@@ -265,6 +282,7 @@ def _new_job() -> str:
 
 def _run_job(job_id: str, image_path: Path, filename: str) -> None:
     started = time.time()
+    state_payload = None
     try:
         state_payload = extract_visual_state(image_path)
         if "error" in state_payload:
@@ -291,6 +309,10 @@ def _run_job(job_id: str, image_path: Path, filename: str) -> None:
             job = _jobs.get(job_id)
             if job is not None:
                 job["error"] = str(exc)
+                # Keep the metrics so the page can still show them when the
+                # model call fails - the OpenCV half succeeded independently.
+                if state_payload and "error" not in state_payload:
+                    job["visual_state"] = state_payload
                 job["latency_ms"] = int((time.time() - started) * 1000)
                 job["status"] = "error"
     finally:
@@ -308,6 +330,22 @@ def _run_job(job_id: str, image_path: Path, filename: str) -> None:
 
 app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="/static")
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
+
+
+@app.errorhandler(413)
+def _too_large(_err):
+    """The client always parses JSON, so never answer API calls with HTML."""
+    return jsonify({
+        "error": f"Image too large (limit {MAX_UPLOAD_BYTES // (1024 * 1024)} MB)"
+    }), 413
+
+
+@app.errorhandler(404)
+def _not_found(_err):
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Not found"}), 404
+    return "Not found", 404
+
 
 SAMPLE_ROOT = resolve_example_dir()
 
@@ -390,7 +428,7 @@ def api_analyze():
         if not buffer:
             return jsonify({"error": "Empty upload"}), 400
 
-        upload_dir = STATIC_DIR / "tmp"
+        upload_dir = UPLOAD_DIR
         upload_dir.mkdir(parents=True, exist_ok=True)
         image_path = upload_dir / f"_upload_{uuid.uuid4().hex}{suffix}"
         image_path.write_bytes(buffer)
@@ -813,7 +851,12 @@ PAGE_TEMPLATE = r"""<!DOCTYPE html>
       const job = await res.json();
 
       if (job.status === "done") return job;
-      if (job.status === "error") throw new Error(job.error || "Analysis failed");
+      if (job.status === "error") {
+        // Attach the job so the caller can still use the partial visual state.
+        const e = new Error(job.error || "Analysis failed");
+        e.job = job;
+        throw e;
+      }
 
       await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
     }
@@ -839,7 +882,9 @@ PAGE_TEMPLATE = r"""<!DOCTYPE html>
       );
     } catch (err) {
       setStatus(`Error: ${err.message}`, "error");
-      metricsCard.classList.add("hidden");
+      // Keep any OpenCV metrics the server managed to compute.
+      if (err.job && err.job.visual_state) renderMetrics(err.job.visual_state);
+      else metricsCard.classList.add("hidden");
     } finally {
       setBusy(false);
     }
@@ -1001,8 +1046,45 @@ PAGE_TEMPLATE = r"""<!DOCTYPE html>
 # Entry point
 # --------------------------------------------------------------------------- #
 
+def _port_available(host: str, port: int) -> bool:
+    """Return True when we can bind host:port (catches the common conflicts)."""
+    import socket
+
+    family = socket.AF_INET6 if ":" in host else socket.AF_INET
+    sock = socket.socket(family, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        sock.bind((host, port))
+        return True
+    except OSError:
+        return False
+    finally:
+        sock.close()
+
+
+def _explain_port_conflict(host: str, port: int) -> str:
+    """Turn a bind failure into a message that says what to do about it."""
+    hint = f"Port {port} is already in use."
+    if port == 5000 and sys.platform == "darwin":
+        hint += (
+            "\n  On macOS the AirPlay Receiver often takes port 5000."
+            "\n  Either retry with another port, e.g. --port 8000,"
+            "\n  or turn off System Settings > General > AirDrop & Handoff >"
+            "\n  AirPlay Receiver."
+        )
+    else:
+        hint += f"\n  Pick another port, e.g. --port 8000."
+    if host == "0.0.0.0":
+        hint += (
+            "\n  Note: binding 0.0.0.0 also conflicts when another process holds"
+            "\n  the port on a specific interface. Try the default --host 127.0.0.1."
+        )
+    return hint
+
+
 if __name__ == "__main__":
     import argparse
+    import sys
 
     parser = argparse.ArgumentParser(description="Clef-Flash Vision Decision Studio (web)")
     parser.add_argument("--host", default="127.0.0.1", help="bind address (default 127.0.0.1)")
@@ -1026,5 +1108,8 @@ if __name__ == "__main__":
     print(f"  samples     : {SAMPLE_ROOT or 'not found'}")
     print(f"  stylesheet  : {css}{'' if css.is_file() else '  (MISSING - run the tailwind build)'}")
     print(f"  serving     : http://{args.host}:{args.port}")
+
+    if not _port_available(args.host, args.port):
+        sys.exit(_explain_port_conflict(args.host, args.port))
 
     app.run(host=args.host, port=args.port, debug=args.debug, threaded=True)

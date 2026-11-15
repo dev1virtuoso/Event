@@ -13,6 +13,7 @@ dependencies = [
     "opencv-python",
     "pathlib",
     "pygame",
+    "flask",
 ]
 
 [project.scripts]

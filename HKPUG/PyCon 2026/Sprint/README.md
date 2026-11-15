@@ -68,6 +68,32 @@ source .venv313/bin/activate
 
 9. Try the demo script to verify your env, `python -m snake_clef.py`
 
+#### Web UI (optional, runs in the browser)
+
+A Tailwind-styled browser front end is included as an alternative to the pygame
+window. It uses the same OpenCV visual-state extraction and the same
+`ollama.systemone` decision call, so the results match.
+
+```
+pip install flask
+
+python Draft/image_clef_web.py
+# then open http://127.0.0.1:5000
+```
+
+Drop an image onto the panel, click the panel to browse, or pick one of the
+bundled `PyConHK2026_Sprint` sample images from the gallery at the bottom.
+Useful flags: `--port 8000`, `--samples path/to/images`, `--debug`.
+
+The stylesheet at `Draft/static/tailwind.css` is pre-built and committed, so no
+network access is needed at run time. Only rebuild it if you edit the page
+markup:
+
+```
+cd Draft
+npx tailwindcss@3 -c tailwind.config.js -i tailwind.input.css -o static/tailwind.css --minify
+```
+
 #### Windows (by AI)
 
 ### 1. Download and Install Ollama
