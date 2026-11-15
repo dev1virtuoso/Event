@@ -21,6 +21,7 @@ REMOTE_OLLAMA_HOST = "http://127.0.0.1:11434"
 os.environ["OLLAMA_HOST"] = REMOTE_OLLAMA_HOST
 
 import json
+import sys
 import tempfile
 import threading
 import time
@@ -47,7 +48,6 @@ APP_DIR = Path(__file__).resolve().parent
 STATIC_DIR = APP_DIR / "static"
 # Uploads live outside the static tree so they are never publicly servable.
 UPLOAD_DIR = Path(tempfile.gettempdir()) / "clef_flash_uploads"
-
 
 MODEL_NAME = "clef-flash"
 KEEP_ALIVE = "30m"
@@ -1084,7 +1084,6 @@ def _explain_port_conflict(host: str, port: int) -> str:
 
 if __name__ == "__main__":
     import argparse
-    import sys
 
     parser = argparse.ArgumentParser(description="Clef-Flash Vision Decision Studio (web)")
     parser.add_argument("--host", default="127.0.0.1", help="bind address (default 127.0.0.1)")
